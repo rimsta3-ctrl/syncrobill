@@ -1,0 +1,357 @@
+:root {
+  --bg-center: #001F3F;
+  --bg-edge: #000C17;
+  --card: #001F3F;
+  --card-alt: #050505;
+  --gold: #D4AF37;
+  --gold-light: #F1E7C0;
+  --gold-muted: #CFA035;
+  --text-primary: #F1E7C0;
+  --text-secondary: #5F7D91;
+  --border: #CFA035;
+  --shadow: 0 8px 16px rgba(0, 0, 0, 0.8);
+  --radius: 8px;
+  --padding: 32px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: radial-gradient(circle at center, var(--bg-center) 0%, var(--bg-edge) 100%);
+  color: var(--text-primary);
+  line-height: 1.6;
+  letter-spacing: 0.05em;
+  min-height: 100vh;
+}
+
+.app-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 48px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+header h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--gold-light);
+  margin: 0;
+  letter-spacing: 0.1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+header h1::before {
+  content: "🏦";
+  font-size: 3rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--padding);
+  margin-bottom: 32px;
+  width: 100%;
+  max-width: 900px;
+}
+
+.wallet-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.wallet-status .info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+}
+
+.wallet-status .info::before {
+  font-size: 1.5rem;
+  color: var(--gold);
+}
+
+.wallet-status .balance::before {
+  content: "🏦";
+}
+
+.wallet-status .network::before {
+  content: "📡";
+}
+
+.wallet-status .btn {
+  background: var(--gold);
+  color: var(--card-alt);
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+}
+
+.wallet-status .btn:hover {
+  background: var(--gold-muted);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6);
+}
+
+.contract-info h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 0 0 32px 0;
+  color: var(--gold-light);
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+
+.progress-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40px;
+  position: relative;
+}
+
+.progress-bar::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--gold-light);
+  z-index: 1;
+}
+
+.progress-step {
+  background: var(--card);
+  border: 3px solid var(--gold-light);
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--gold-light);
+  position: relative;
+  z-index: 2;
+  transition: all 0.3s;
+}
+
+.progress-step.active {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--card-alt);
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
+}
+
+.contract-info .data {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 32px;
+}
+
+.contract-info .amount {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--gold);
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+}
+
+.contract-info .amount span {
+  font-size: 1.5rem;
+  font-weight: 400;
+  margin-left: 8px;
+  color: var(--gold-light);
+}
+
+.contract-info .hash {
+  background: #2a2a2a;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  word-break: break-all;
+  max-width: 400px;
+}
+
+.action-panel h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 0 0 32px 0;
+  color: var(--gold-light);
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+
+.action-panel .sections {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+}
+
+.action-panel .section {
+  padding: 24px;
+  border-radius: var(--radius);
+  background: var(--card-alt);
+  border: 1px solid var(--border);
+}
+
+.action-panel .section h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 20px 0;
+  color: var(--gold-light);
+  text-align: center;
+}
+
+.action-panel label {
+  display: block;
+  margin-bottom: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: 0.03em;
+}
+
+.action-panel input {
+  width: 100%;
+  padding: 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 1rem;
+  background: var(--card);
+  color: var(--text-primary);
+  transition: border-color 0.3s;
+}
+
+.action-panel input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+}
+
+.action-panel .btn {
+  width: 100%;
+  padding: 16px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  letter-spacing: 0.05em;
+  margin-top: 16px;
+}
+
+.action-panel .btn.primary {
+  background: var(--gold);
+  color: var(--card-alt);
+}
+
+.action-panel .btn.primary:hover {
+  background: var(--gold-muted);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
+}
+
+.action-panel .btn.secondary {
+  background: var(--card-alt);
+  color: var(--gold);
+  border: 2px solid var(--gold);
+}
+
+.action-panel .btn.secondary:hover {
+  background: var(--gold);
+  color: var(--card-alt);
+}
+
+.action-panel .btn:disabled {
+  background: #333;
+  color: #666;
+  cursor: not-allowed;
+  border-color: #333;
+  transform: none;
+  box-shadow: none;
+}
+
+@keyframes goldPulse {
+  0% {
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
+  }
+}
+
+.golden-glow {
+  background: var(--gold);
+  color: #050505;
+  animation: goldPulse 2s infinite;
+  transition: all 0.5s;
+}
+
+footer {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-top: 48px;
+  letter-spacing: 0.03em;
+}
+
+.message-bar {
+  margin-bottom: 32px;
+  min-height: 28px;
+  text-align: center;
+}
+
+.success {
+  color: var(--gold);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.error {
+  color: #ff6b6b;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.loading {
+  font-weight: 600;
+  color: var(--gold-light);
+  text-align: center;
+}
