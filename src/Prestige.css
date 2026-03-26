@@ -219,7 +219,8 @@ header h1::before {
 
 .terminal {
   position: relative;
-  padding: 80px 0;
+  min-height: 100vh;
+  padding: 96px 0 88px;
 }
 
 .terminal h2 {
@@ -231,28 +232,32 @@ header h1::before {
 
 .back-btn {
   position: absolute;
-  top: 20px;
-  left: 20px;
+  top: 24px;
+  left: 24px;
   background: transparent;
   color: var(--gold);
   border: 1px solid var(--gold);
-  padding: 8px 16px;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  font-weight: 500;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   cursor: pointer;
   transition: all 0.3s;
   font-family: 'Inter', sans-serif;
 }
 
 .back-btn:hover {
-  background: var(--gold);
-  color: #001A33;
+  background: rgba(181, 143, 65, 0.14);
+  color: var(--gold-light);
+  border-color: var(--gold-light);
+  box-shadow: 0 0 18px rgba(181, 143, 65, 0.25);
+  transform: translateY(-1px);
 }
 
 .terminal-footer {
   position: absolute;
-  bottom: 20px;
+  bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 0.75rem;
@@ -260,6 +265,7 @@ header h1::before {
   text-align: center;
   font-family: 'Inter', sans-serif;
   white-space: nowrap;
+  letter-spacing: 0.06em;
 }
 
 .card {
@@ -449,6 +455,7 @@ header h1::before {
   cursor: pointer;
   transition: all 0.3s;
   margin-top: 12px;
+  min-height: 48px;
 }
 
 .action-panel .btn.primary {
@@ -476,6 +483,8 @@ header h1::before {
   color: #666;
   cursor: not-allowed;
   border-color: #333;
+  box-shadow: none;
+  transform: none;
 }
 
 .message-bar {
@@ -499,6 +508,36 @@ header h1::before {
   color: var(--text-primary);
 }
 
+.btn-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(5, 5, 5, 0.25);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+.action-panel .btn.secondary .spinner {
+  border-color: rgba(181, 143, 65, 0.25);
+  border-top-color: currentColor;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes goldPulse {
   0% {
     box-shadow: 0 0 10px rgba(181, 143, 65, 0.2);
@@ -520,6 +559,20 @@ header h1::before {
 
 /* Responsive */
 @media (max-width: 768px) {
+  .terminal {
+    padding-top: 112px;
+  }
+
+  .back-btn {
+    left: 16px;
+    top: 16px;
+  }
+
+  .terminal-footer {
+    width: calc(100% - 32px);
+    white-space: normal;
+  }
+
   .hero h1 {
     font-size: 2.5rem;
   }

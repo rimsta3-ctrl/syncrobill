@@ -11,11 +11,16 @@ export default function ActionPanel({
   onSubmitBL,
   onWithdraw,
   canWithdraw,
-  isPending,
+  pendingAction,
 }) {
+  const isPending = pendingAction.length > 0;
+  const isDepositing = pendingAction === "deposit";
+  const isSubmittingBL = pendingAction === "submitBL";
+  const isWithdrawing = pendingAction === "withdraw";
+
   return (
     <div className="action-panel card">
-      <h2>Centre d'Opérations</h2>
+      <h2>Centre d'Operations</h2>
       <div className="sections">
         <div className="section">
           <h3>Section Importateur</h3>
@@ -30,7 +35,14 @@ export default function ActionPanel({
             />
           </label>
           <button onClick={onDeposit} disabled={isPending} className="btn primary">
-            {isPending ? "En cours..." : "Déposer des fonds"}
+            {isDepositing ? (
+              <span className="btn-loading">
+                <span className="spinner" aria-hidden="true" />
+                Chargement...
+              </span>
+            ) : (
+              "Deposer des fonds"
+            )}
           </button>
         </div>
         <div className="section">
@@ -45,7 +57,7 @@ export default function ActionPanel({
             />
           </label>
           <button onClick={onSubmitBL} disabled={isPending} className="btn primary">
-            {isPending ? "En cours..." : "Soumettre le B/L"}
+            {isSubmittingBL ? "En cours..." : "Soumettre le B/L"}
           </button>
 
           <label style={{ marginTop: "16px", display: "block" }}>
@@ -61,9 +73,16 @@ export default function ActionPanel({
           <button
             onClick={onWithdraw}
             disabled={!canWithdraw || isPending}
-            className={`btn secondary ${canWithdraw && !isPending ? 'golden-glow' : ''}`}
+            className={`btn secondary ${canWithdraw && !isPending ? "golden-glow" : ""}`}
           >
-            {isPending ? "En cours..." : "Encaisser les fonds"}
+            {isWithdrawing ? (
+              <span className="btn-loading">
+                <span className="spinner" aria-hidden="true" />
+                Chargement...
+              </span>
+            ) : (
+              "Encaisser les fonds"
+            )}
           </button>
         </div>
       </div>

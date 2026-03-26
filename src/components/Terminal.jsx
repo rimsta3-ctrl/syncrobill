@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BrowserProvider, parseEther } from "ethers";
-import { getProvider, getContract, EXPECTED_CHAIN_ID, CONTRACT_ADDRESS } from "../utils/blockchain";
+import { parseEther } from "ethers";
+import { getProvider, getContract, EXPECTED_CHAIN_ID } from "../utils/blockchain";
 import WalletStatus from "./WalletStatus";
 import ContractInfo from "./ContractInfo";
 import ActionPanel from "./ActionPanel";
@@ -16,10 +16,10 @@ function Terminal() {
   const [blHash, setBlHash] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const [blHashInput, setBlHashInput] = useState("");
-  const [withdrawId, setWithdrawId] = useState("1");
+  const [withdrawId, setWithdrawId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [isPending, setIsPending] = useState(false);
+  const [pendingAction, setPendingAction] = useState("");
   const [loadingContract, setLoadingContract] = useState(false);
 
   const [provider, setProvider] = useState(null);
@@ -37,11 +37,11 @@ function Terminal() {
       const hashValue = await contract.blHash();
 
       setStatus(Number(statusValue));
-      setEscrowBalance(Number(balanceValue) / 1e18); // display in ETH
+      setEscrowBalance(Number(balanceValue) / 1e18);
       setBlHash(hashValue || "");
-      setMessage("Données du contrat mises à jour.");
+      setMessage("Donnees du contrat mises a jour.");
     } catch (e) {
-      setError("Impossible de lire l'état du contrat");
+      setError("Impossible de lire l'etat du contrat");
       console.error(e);
     } finally {
       setLoadingContract(false);
@@ -60,7 +60,7 @@ function Terminal() {
         setBalance(parseFloat(balanceBn.toString() / 1e18).toFixed(4));
       }
     } catch (e) {
-      setError("Erreur lors de la lecture du solde ou réseau.");
+      setError("Erreur lors de la lecture du solde ou reseau.");
       console.error(e);
     }
   };
@@ -69,13 +69,13 @@ function Terminal() {
     try {
       setError("");
       if (!window.ethereum) {
-        setError("MetaMask n'est pas installé");
+        setError("MetaMask n'est pas installe");
         return;
       }
 
       const p = getProvider();
       if (!p) {
-        setError("Impossible de créer le provider MetaMask");
+        setError("Impossible de creer le provider MetaMask");
         return;
       }
 
@@ -102,7 +102,7 @@ function Terminal() {
         await refreshData(p);
       });
 
-      setMessage("Connecté avec succès.");
+      setMessage("Connecte avec succes.");
     } catch (e) {
       console.error(e);
       setError("Erreur de connexion au portefeuille.");
@@ -116,13 +116,13 @@ function Terminal() {
     }
 
     if (!depositAmount || Number(depositAmount) <= 0) {
-      setError("Entrez un montant de dépôt valide.");
+      setError("Entrez un montant de depot valide.");
       return;
     }
 
-    setIsPending(true);
+    setPendingAction("deposit");
     setError("");
-    setMessage("Envoi de la transaction de dépôt...");
+    setMessage("Envoi de la transaction de depot...");
 
     try {
       const contract = getContract(signer);
@@ -130,15 +130,15 @@ function Terminal() {
       const tx = await contract.deposit(ethValue, { value: ethValue });
       await tx.wait();
 
-      setMessage("Transaction de dépôt réussie !");
+      setMessage("Transaction de depot reussie.");
       setDepositAmount("");
       await refreshData();
       await updateBalanceAndNetwork(provider, signer);
     } catch (e) {
       console.error(e);
-      setError("Erreur lors du dépôt.");
+      setError("Erreur lors du depot.");
     } finally {
-      setIsPending(false);
+      setPendingAction("");
     }
   };
 
@@ -153,7 +153,7 @@ function Terminal() {
       return;
     }
 
-    setIsPending(true);
+    setPendingAction("submitBL");
     setError("");
     setMessage("Envoi de la transaction de soumission du B/L...");
 
@@ -162,14 +162,14 @@ function Terminal() {
       const tx = await contract.submitBL(blHashInput);
       await tx.wait();
 
-      setMessage("Publication du B/L réussie !");
+      setMessage("Publication du B/L reussie.");
       setBlHashInput("");
       await refreshData();
     } catch (e) {
       console.error(e);
       setError("Erreur lors de l'envoi du B/L.");
     } finally {
-      setIsPending(false);
+      setPendingAction("");
     }
   };
 
@@ -184,7 +184,7 @@ function Terminal() {
       return;
     }
 
-    setIsPending(true);
+    setPendingAction("withdraw");
     setError("");
     setMessage("Envoi de la transaction de retrait...");
 
@@ -193,30 +193,27 @@ function Terminal() {
       const tx = await contract.withdraw(Number(withdrawId));
       await tx.wait();
 
-      setMessage("Paiement récupéré avec succès par l'exportateur !");
+      setMessage("Paiement recupere avec succes par l'exportateur.");
       await refreshData();
       await updateBalanceAndNetwork(provider, signer);
     } catch (e) {
       console.error(e);
-      setError("Erreur lors du retrait. Vérifiez que vous êtes l'exportateur ou que le B/L est soumis.");
+      setError("Erreur lors du retrait. Verifiez que vous etes l'exportateur ou que le B/L est soumis.");
     } finally {
-      setIsPending(false);
+      setPendingAction("");
     }
   };
 
   useEffect(() => {
     if (window.ethereum) {
-      // connexion automatique possible, mais on attend le clic.
+      // Connexion manuelle uniquement.
     }
   }, []);
 
   return (
     <div className="terminal">
-      <button 
-        className="back-btn" 
-        onClick={() => navigate('/')}
-      >
-        RETOUR À L'ACCUEIL
+      <button className="back-btn" onClick={() => navigate("/")}>
+        &larr; RETOUR A L'ACCUEIL
       </button>
       <h2>Terminal de Transaction Syncrobill</h2>
       <div className="app-container">
@@ -250,12 +247,17 @@ function Terminal() {
           onDeposit={onDeposit}
           onSubmitBL={onSubmitBL}
           onWithdraw={onWithdraw}
-          canWithdraw={status === 1 && Number(escrowBalance) > 0 && blHash.length > 0}
-          isPending={isPending}
+          canWithdraw={
+            status === 1 &&
+            Number(escrowBalance) > 0 &&
+            blHash.length > 0 &&
+            withdrawId.trim().length > 0
+          }
+          pendingAction={pendingAction}
         />
       </div>
       <footer className="terminal-footer">
-        Réseau : Hardhat Local (31337) | Contrat : {CONTRACT_ADDRESS}
+        {"R\u00e9seau : Hardhat Local | Contrat : 0x5FbDB...aa3"}
       </footer>
     </div>
   );
