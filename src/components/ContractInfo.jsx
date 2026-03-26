@@ -1,51 +1,42 @@
 import React from "react";
+import { useI18n } from "../i18n";
 
-const statusMap = {
-  0: "En attente de fonds",
-  1: "Fonds bloqués",
-  2: "Paiement libéré",
-};
+const getProgressSteps = (status, blHash, t) => [
+  { label: t("contract.steps.deposit"), active: status >= 0 },
+  { label: t("contract.steps.blSubmitted"), active: blHash && blHash.length > 0 },
+  { label: t("contract.steps.fundsReleased"), active: status === 2 },
+];
 
-const getProgressSteps = (status, blHash) => {
-  const steps = [
-    { label: "Dépôt", active: status >= 0 },
-    { label: "B/L Soumis", active: blHash && blHash.length > 0 },
-    { label: "Fonds Libérés", active: status === 2 },
-  ];
-  return steps;
-};
-
-export default function ContractInfo({ status, escrowBalance, blHash, loading }) {
-  const steps = getProgressSteps(status, blHash);
+export default function ContractInfo({ shipmentId, status, escrowBalance, blHash, loading }) {
+  const { t } = useI18n();
+  const steps = getProgressSteps(status, blHash, t);
 
   return (
     <div className="contract-info card">
-      <h2>Vue d'ensemble de la Shipment #1</h2>
+      <h2>{t("contract.overview", { shipmentId })}</h2>
       <div className="progress-bar">
         {steps.map((step, index) => (
-          <div
-            key={index}
-            className={`progress-step ${step.active ? 'active' : ''}`}
-          >
+          <div key={index} className={`progress-step ${step.active ? "active" : ""}`} title={step.label}>
             {index + 1}
           </div>
         ))}
       </div>
       {loading ? (
-        <div className="loading">Chargement en cours...</div>
+        <div className="loading">{t("contract.loading")}</div>
       ) : (
-        <>
-          <div className="data">
-            <div>
-              <strong>Montant en Escrow</strong>
-              <div className="amount">{escrowBalance}<span>ETH</span></div>
-            </div>
-            <div>
-              <strong>Hash du B/L</strong>
-              <div className="hash">{blHash || "Non soumis"}</div>
+        <div className="data">
+          <div>
+            <strong>{t("contract.escrowAmount")}</strong>
+            <div className="amount">
+              {escrowBalance}
+              <span>ETH</span>
             </div>
           </div>
-        </>
+          <div>
+            <strong>{t("contract.blHash")}</strong>
+            <div className="hash">{blHash || t("contract.notSubmitted")}</div>
+          </div>
+        </div>
       )}
     </div>
   );

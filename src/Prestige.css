@@ -83,6 +83,42 @@ header h1::before {
   box-shadow: 0 4px 12px rgba(181, 143, 65, 0.4);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+}
+
+.language-switcher span {
+  white-space: nowrap;
+}
+
+.language-switcher select {
+  min-width: 140px;
+  padding: 10px 12px;
+  border: 1px solid rgba(181, 143, 65, 0.45);
+  border-radius: 999px;
+  background: rgba(0, 17, 34, 0.92);
+  color: var(--gold-light);
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+}
+
+.language-switcher select:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(181, 143, 65, 0.18);
+}
+
 /* Hero Section */
 .hero {
   min-height: 100vh;
@@ -228,6 +264,12 @@ header h1::before {
   font-size: 2.5rem;
   color: var(--gold);
   margin: 0 0 48px 0;
+}
+
+.terminal-toolbar {
+  position: absolute;
+  top: 24px;
+  right: 24px;
 }
 
 .back-btn {
@@ -508,6 +550,96 @@ header h1::before {
   color: var(--text-primary);
 }
 
+.transactions-history h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 0 0 24px 0;
+  color: var(--gold-light);
+}
+
+.history-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid rgba(181, 143, 65, 0.28);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(181, 143, 65, 0.08), rgba(0, 17, 34, 0.24)),
+    rgba(0, 17, 34, 0.92);
+}
+
+.history-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.history-table thead {
+  background: linear-gradient(90deg, rgba(181, 143, 65, 0.18), rgba(0, 17, 34, 0.96));
+}
+
+.history-table th,
+.history-table td {
+  padding: 16px 18px;
+  text-align: left;
+  border-bottom: 1px solid rgba(181, 143, 65, 0.14);
+  font-family: 'Inter', sans-serif;
+}
+
+.history-table th {
+  color: var(--gold-light);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.history-table td {
+  color: #e7d7b1;
+  font-size: 0.95rem;
+}
+
+.history-table tbody tr:hover {
+  background: rgba(181, 143, 65, 0.08);
+}
+
+.history-hash {
+  max-width: 240px;
+  word-break: break-all;
+  color: var(--text-secondary);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 108px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.status-badge.locked {
+  background: rgba(181, 143, 65, 0.18);
+  color: var(--gold-light);
+  border-color: rgba(243, 233, 199, 0.28);
+}
+
+.status-badge.released {
+  background: rgba(40, 167, 69, 0.14);
+  color: #8ef0a7;
+  border-color: rgba(40, 167, 69, 0.28);
+}
+
+.empty-history {
+  padding: 20px;
+  border: 1px dashed rgba(181, 143, 65, 0.28);
+  border-radius: 12px;
+  color: var(--text-primary);
+  text-align: center;
+  font-family: 'Inter', sans-serif;
+}
+
 .btn-loading {
   display: inline-flex;
   align-items: center;
@@ -563,9 +695,21 @@ header h1::before {
     padding-top: 112px;
   }
 
+  .header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .back-btn {
     left: 16px;
     top: 16px;
+  }
+
+  .terminal-toolbar {
+    position: static;
+    display: flex;
+    justify-content: center;
+    margin-bottom: 24px;
   }
 
   .terminal-footer {
@@ -584,4 +728,33 @@ header h1::before {
   .investment-ideas {
     grid-template-columns: 1fr;
   }
+
+  .wallet-status,
+  .contract-info .data,
+  .action-panel .sections {
+    flex-direction: column;
+  }
+
+  .action-panel .sections {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+[dir="rtl"] .back-btn {
+  left: auto;
+  right: 24px;
+}
+
+[dir="rtl"] .terminal-toolbar {
+  right: auto;
+  left: 24px;
+}
+
+[dir="rtl"] .history-table th,
+[dir="rtl"] .history-table td,
+[dir="rtl"] .action-panel label,
+[dir="rtl"] .contract-info,
+[dir="rtl"] .wallet-status {
+  text-align: right;
 }

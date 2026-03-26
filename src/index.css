@@ -501,3 +501,112 @@ footer {
   color: var(--gold-light);
   text-align: center;
 }
+
+.transactions-history h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 0 0 24px 0;
+  color: var(--gold-light);
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+
+.history-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid rgba(207, 160, 53, 0.35);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(181, 143, 65, 0.08), rgba(0, 12, 23, 0.2)),
+    rgba(0, 12, 23, 0.92);
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.history-table thead {
+  background: linear-gradient(90deg, rgba(181, 143, 65, 0.24), rgba(0, 31, 63, 0.96));
+}
+
+.history-table th,
+.history-table td {
+  padding: 16px 18px;
+  text-align: left;
+  border-bottom: 1px solid rgba(207, 160, 53, 0.16);
+}
+
+.history-table th {
+  color: var(--gold-light);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.history-table td {
+  color: #d9e6ef;
+  font-size: 0.95rem;
+}
+
+.history-table tbody tr:hover {
+  background: rgba(181, 143, 65, 0.08);
+}
+
+.history-hash {
+  max-width: 220px;
+  word-break: break-all;
+  color: var(--text-secondary);
+  font-family: 'Courier New', monospace;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 104px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border: 1px solid transparent;
+}
+
+.status-badge.locked {
+  background: rgba(181, 143, 65, 0.18);
+  color: var(--gold-light);
+  border-color: rgba(241, 231, 192, 0.35);
+}
+
+.status-badge.released {
+  background: rgba(34, 197, 94, 0.16);
+  color: #9ef0b0;
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.empty-history {
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  background: rgba(0, 12, 23, 0.55);
+  border: 1px dashed rgba(207, 160, 53, 0.28);
+}
+
+@media (max-width: 768px) {
+  .contract-info .data {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .action-panel .sections {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .card {
+    padding: 24px;
+  }
+}

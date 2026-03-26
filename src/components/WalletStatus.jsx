@@ -1,4 +1,5 @@
 import React from "react";
+import { useI18n } from "../i18n";
 
 function shortAddress(address) {
   if (!address) return "-";
@@ -6,20 +7,22 @@ function shortAddress(address) {
 }
 
 export default function WalletStatus({ address, balance, networkOk, onConnect, error }) {
+  const { t } = useI18n();
+
   return (
     <div className="wallet-status card">
       <div className="info balance">
-        <strong>Solde :</strong> {balance} ETH
+        <strong>{t("wallet.balance")}:</strong> {balance} ETH
       </div>
       <div className="info network">
-        <strong>Réseau :</strong> {networkOk ? "Hardhat (31337)" : "Mauvais réseau"}
+        <strong>{t("wallet.network")}:</strong> {networkOk ? "Hardhat (31337)" : t("wallet.wrongNetwork")}
       </div>
       <div className="info">
-        <strong>Adresse :</strong> {address ? shortAddress(address) : "Non connecté"}
+        <strong>{t("wallet.address")}:</strong> {address ? shortAddress(address) : t("wallet.notConnected")}
       </div>
       {error && <div className="error">{error}</div>}
       <button onClick={onConnect} className="btn">
-        Connecter MetaMask
+        {t("wallet.connect")}
       </button>
     </div>
   );

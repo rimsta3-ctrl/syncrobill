@@ -1,8 +1,11 @@
 import React from "react";
+import { useI18n } from "../i18n";
 
 export default function ActionPanel({
   depositAmount,
   setDepositAmount,
+  sellerAddress,
+  setSellerAddress,
   blHashInput,
   setBlHashInput,
   withdrawId,
@@ -13,6 +16,7 @@ export default function ActionPanel({
   canWithdraw,
   pendingAction,
 }) {
+  const { t } = useI18n();
   const isPending = pendingAction.length > 0;
   const isDepositing = pendingAction === "deposit";
   const isSubmittingBL = pendingAction === "submitBL";
@@ -20,12 +24,21 @@ export default function ActionPanel({
 
   return (
     <div className="action-panel card">
-      <h2>Centre d'Operations</h2>
+      <h2>{t("actions.center")}</h2>
       <div className="sections">
         <div className="section">
-          <h3>Section Importateur</h3>
+          <h3>{t("actions.importer")}</h3>
           <label>
-            Montant (ETH)
+            {t("actions.sellerAddress")}
+            <input
+              type="text"
+              value={sellerAddress}
+              onChange={(e) => setSellerAddress(e.target.value)}
+              placeholder="0x..."
+            />
+          </label>
+          <label>
+            {t("actions.amountEth")}
             <input
               type="number"
               value={depositAmount}
@@ -38,17 +51,17 @@ export default function ActionPanel({
             {isDepositing ? (
               <span className="btn-loading">
                 <span className="spinner" aria-hidden="true" />
-                Chargement...
+                {t("ui.loading")}
               </span>
             ) : (
-              "Deposer des fonds"
+              t("actions.depositFunds")
             )}
           </button>
         </div>
         <div className="section">
-          <h3>Section Exportateur</h3>
+          <h3>{t("actions.exporter")}</h3>
           <label>
-            SHA-256 du B/L
+            {t("actions.blSha")}
             <input
               type="text"
               value={blHashInput}
@@ -57,11 +70,11 @@ export default function ActionPanel({
             />
           </label>
           <button onClick={onSubmitBL} disabled={isPending} className="btn primary">
-            {isSubmittingBL ? "En cours..." : "Soumettre le B/L"}
+            {isSubmittingBL ? t("actions.inProgress") : t("actions.submitBL")}
           </button>
 
           <label style={{ marginTop: "16px", display: "block" }}>
-            ID de la shipment (pour retrait)
+            {t("actions.shipmentIdWithdraw")}
             <input
               type="number"
               min="1"
@@ -78,10 +91,10 @@ export default function ActionPanel({
             {isWithdrawing ? (
               <span className="btn-loading">
                 <span className="spinner" aria-hidden="true" />
-                Chargement...
+                {t("ui.loading")}
               </span>
             ) : (
-              "Encaisser les fonds"
+              t("actions.cashOut")
             )}
           </button>
         </div>
