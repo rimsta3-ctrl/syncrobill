@@ -635,6 +635,291 @@ const translations = {
   },
 };
 
+const translationExtensions = {
+  en: {
+    ui: {
+      languages: {
+        en: "English",
+        fr: "French",
+        de: "German",
+        it: "Italian",
+        es: "Spanish",
+        ar: "Arabic",
+      },
+    },
+    navbar: {
+      home: "Home",
+      backHome: "Back to Home",
+    },
+    actions: {
+      uploadPdf: "Upload B/L PDF",
+      uploadHint: "Only PDF files are accepted.",
+      selectedFile: "Selected file",
+      noFileSelected: "No PDF selected",
+      uploadAndSubmit: "Upload PDF & Submit B/L",
+      uploading: "Uploading PDF...",
+    },
+    terminal: {
+      table: {
+        document: "Document",
+      },
+      document: {
+        open: "Open document",
+        missing: "No document",
+      },
+      errors: {
+        supabaseMissing: "Supabase is not configured.",
+        invalidPdf: "Select a PDF file before submitting the B/L.",
+        uploadFailed: "PDF upload failed.",
+        hashFailed: "Unable to generate the PDF hash.",
+      },
+      messages: {
+        uploadingDocument: "Uploading the PDF, storing it in Supabase, and submitting the B/L...",
+      },
+    },
+  },
+  fr: {
+    ui: {
+      languages: {
+        en: "Anglais",
+        fr: "Français",
+        de: "Allemand",
+        it: "Italien",
+        es: "Espagnol",
+        ar: "Arabe",
+      },
+    },
+    navbar: {
+      home: "Accueil",
+      backHome: "Retour à l'accueil",
+    },
+    actions: {
+      uploadPdf: "Téléverser le PDF du B/L",
+      uploadHint: "Seuls les fichiers PDF sont acceptés.",
+      selectedFile: "Fichier sélectionné",
+      noFileSelected: "Aucun PDF sélectionné",
+      uploadAndSubmit: "Téléverser le PDF et soumettre le B/L",
+      uploading: "Téléversement du PDF...",
+    },
+    terminal: {
+      table: {
+        document: "Document",
+      },
+      document: {
+        open: "Ouvrir le document",
+        missing: "Aucun document",
+      },
+      errors: {
+        supabaseMissing: "Supabase n'est pas configuré.",
+        invalidPdf: "Sélectionnez un fichier PDF avant de soumettre le B/L.",
+        uploadFailed: "Le téléversement du PDF a échoué.",
+        hashFailed: "Impossible de générer le hash du PDF.",
+      },
+      messages: {
+        uploadingDocument:
+          "Téléversement du PDF, enregistrement dans Supabase et soumission du B/L...",
+      },
+    },
+  },
+  de: {
+    ui: {
+      languages: {
+        en: "Englisch",
+        fr: "Französisch",
+        de: "Deutsch",
+        it: "Italienisch",
+        es: "Spanisch",
+        ar: "Arabisch",
+      },
+    },
+    navbar: {
+      home: "Startseite",
+      backHome: "Zurück zur Startseite",
+    },
+    actions: {
+      uploadPdf: "B/L-PDF hochladen",
+      uploadHint: "Nur PDF-Dateien werden akzeptiert.",
+      selectedFile: "Ausgewählte Datei",
+      noFileSelected: "Kein PDF ausgewählt",
+      uploadAndSubmit: "PDF hochladen und B/L übermitteln",
+      uploading: "PDF wird hochgeladen...",
+    },
+    terminal: {
+      table: {
+        document: "Dokument",
+      },
+      document: {
+        open: "Dokument öffnen",
+        missing: "Kein Dokument",
+      },
+      errors: {
+        supabaseMissing: "Supabase ist nicht konfiguriert.",
+        invalidPdf: "Wählen Sie vor dem Übermitteln des B/L eine PDF-Datei aus.",
+        uploadFailed: "PDF-Upload fehlgeschlagen.",
+        hashFailed: "PDF-Hash konnte nicht erzeugt werden.",
+      },
+      messages: {
+        uploadingDocument:
+          "PDF wird hochgeladen, in Supabase gespeichert und das B/L wird übermittelt...",
+      },
+    },
+  },
+  it: {
+    ui: {
+      languages: {
+        en: "Inglese",
+        fr: "Francese",
+        de: "Tedesco",
+        it: "Italiano",
+        es: "Spagnolo",
+        ar: "Arabo",
+      },
+    },
+    navbar: {
+      home: "Home",
+      backHome: "Torna alla home",
+    },
+    actions: {
+      uploadPdf: "Carica PDF del B/L",
+      uploadHint: "Sono accettati solo file PDF.",
+      selectedFile: "File selezionato",
+      noFileSelected: "Nessun PDF selezionato",
+      uploadAndSubmit: "Carica PDF e invia B/L",
+      uploading: "Caricamento PDF...",
+    },
+    terminal: {
+      table: {
+        document: "Documento",
+      },
+      document: {
+        open: "Apri documento",
+        missing: "Nessun documento",
+      },
+      errors: {
+        supabaseMissing: "Supabase non è configurato.",
+        invalidPdf: "Seleziona un file PDF prima di inviare il B/L.",
+        uploadFailed: "Caricamento PDF non riuscito.",
+        hashFailed: "Impossibile generare l'hash del PDF.",
+      },
+      messages: {
+        uploadingDocument:
+          "Caricamento del PDF, salvataggio in Supabase e invio del B/L...",
+      },
+    },
+  },
+  es: {
+    ui: {
+      languages: {
+        en: "Inglés",
+        fr: "Francés",
+        de: "Alemán",
+        it: "Italiano",
+        es: "Español",
+        ar: "Árabe",
+      },
+    },
+    navbar: {
+      home: "Inicio",
+      backHome: "Volver al inicio",
+    },
+    actions: {
+      uploadPdf: "Subir PDF del B/L",
+      uploadHint: "Solo se aceptan archivos PDF.",
+      selectedFile: "Archivo seleccionado",
+      noFileSelected: "Ningún PDF seleccionado",
+      uploadAndSubmit: "Subir PDF y enviar B/L",
+      uploading: "Subiendo PDF...",
+    },
+    terminal: {
+      table: {
+        document: "Documento",
+      },
+      document: {
+        open: "Abrir documento",
+        missing: "Sin documento",
+      },
+      errors: {
+        supabaseMissing: "Supabase no está configurado.",
+        invalidPdf: "Selecciona un archivo PDF antes de enviar el B/L.",
+        uploadFailed: "La subida del PDF falló.",
+        hashFailed: "No se pudo generar el hash del PDF.",
+      },
+      messages: {
+        uploadingDocument:
+          "Subiendo el PDF, guardándolo en Supabase y enviando el B/L...",
+      },
+    },
+  },
+  ar: {
+    ui: {
+      languages: {
+        en: "الإنجليزية",
+        fr: "الفرنسية",
+        de: "الألمانية",
+        it: "الإيطالية",
+        es: "الإسبانية",
+        ar: "العربية",
+      },
+    },
+    navbar: {
+      home: "الرئيسية",
+      backHome: "العودة إلى الرئيسية",
+    },
+    actions: {
+      uploadPdf: "رفع ملف PDF لبوليصة الشحن",
+      uploadHint: "يُسمح فقط بملفات PDF.",
+      selectedFile: "الملف المحدد",
+      noFileSelected: "لم يتم اختيار PDF",
+      uploadAndSubmit: "رفع PDF وإرسال بوليصة الشحن",
+      uploading: "جارٍ رفع ملف PDF...",
+    },
+    terminal: {
+      table: {
+        document: "المستند",
+      },
+      document: {
+        open: "فتح المستند",
+        missing: "لا يوجد مستند",
+      },
+      errors: {
+        supabaseMissing: "لم يتم إعداد Supabase.",
+        invalidPdf: "اختر ملف PDF قبل إرسال بوليصة الشحن.",
+        uploadFailed: "فشل رفع ملف PDF.",
+        hashFailed: "تعذر إنشاء بصمة PDF.",
+      },
+      messages: {
+        uploadingDocument:
+          "جارٍ رفع ملف PDF وحفظه في Supabase ثم إرسال بوليصة الشحن...",
+      },
+    },
+  },
+};
+
+function deepMerge(base, override) {
+  if (!override) return base;
+  const output = { ...base };
+
+  Object.keys(override).forEach((key) => {
+    const baseValue = output[key];
+    const overrideValue = override[key];
+
+    if (
+      baseValue &&
+      overrideValue &&
+      typeof baseValue === "object" &&
+      typeof overrideValue === "object" &&
+      !Array.isArray(baseValue) &&
+      !Array.isArray(overrideValue)
+    ) {
+      output[key] = deepMerge(baseValue, overrideValue);
+    } else {
+      output[key] = overrideValue;
+    }
+  });
+
+  return output;
+}
+
 const LanguageContext = createContext(null);
 
 export function LanguageProvider({ children }) {
@@ -644,10 +929,14 @@ export function LanguageProvider({ children }) {
     localStorage.setItem("syncrobill-language", language);
     document.documentElement.lang = language;
     document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
+    document.body.dir = language === "ar" ? "rtl" : "ltr";
   }, [language]);
 
   const value = useMemo(() => {
-    const dictionary = translations[language] || translations.en;
+    const dictionary = deepMerge(
+      deepMerge(translations.en, translationExtensions.en),
+      deepMerge(translations[language] || {}, translationExtensions[language] || {})
+    );
 
     const t = (key, params) => {
       const result = key.split(".").reduce((acc, part) => acc?.[part], dictionary);
@@ -684,4 +973,18 @@ export function useI18n() {
   }
 
   return context;
+}
+
+export function useTranslation() {
+  const { t, language, setLanguage, languages, isRTL } = useI18n();
+
+  return {
+    t,
+    i18n: {
+      language,
+      changeLanguage: setLanguage,
+      languages,
+      dir: isRTL ? "rtl" : "ltr",
+    },
+  };
 }

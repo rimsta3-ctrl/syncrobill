@@ -1,20 +1,21 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatEther, isAddress, parseEther } from "ethers";
+import { FileText } from "lucide-react";
 import { getProvider, getContract, EXPECTED_CHAIN_ID } from "../utils/blockchain";
 import { supabase } from "../supabaseClient";
-import { useI18n } from "../i18n";
+import { useTranslation } from "../i18n";
 import WalletStatus from "./WalletStatus";
 import ContractInfo from "./ContractInfo";
 import ActionPanel from "./ActionPanel";
-import LanguageSwitcher from "./LanguageSwitcher";
+import Navbar from "./Navbar";
 
 const formatWallet = (value = "") =>
   value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "-";
 
 function Terminal() {
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t, i18n } = useTranslation();
   const [account, setAccount] = useState("");
   const [balance, setBalance] = useState("0");
   const [networkOk, setNetworkOk] = useState(false);
@@ -24,7 +25,7 @@ function Terminal() {
   const [blHash, setBlHash] = useState("");
   const [sellerAddress, setSellerAddress] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
-  const [blHashInput, setBlHashInput] = useState("");
+  const [blFile, setBlFile] = useState(null);
   const [withdrawId, setWithdrawId] = useState("");
   const [transactions, setTransactions] = useState([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
@@ -42,7 +43,7 @@ function Terminal() {
       setLoadingTransactions(true);
       const { data, error: fetchError } = await supabase
         .from("shipments")
-        .select("blockchain_id, buyer, seller, amount, bl_hash, status")
+        .select("blockchain_id, buyer, seller, amount, bl_hash, document_url, status")
         .order("blockchain_id", { ascending: false });
 
       if (fetchError) {
@@ -187,6 +188,7 @@ function Terminal() {
           seller: sellerAddress,
           amount: Number(depositAmount),
           bl_hash: "",
+          document_url: null,
           status: "Locked",
         });
 
@@ -216,45 +218,79 @@ function Terminal() {
       return;
     }
 
-    if (!blHashInput) {
-      setError(t("terminal.errors.invalidBLHash"));
+    if (!blFile || blFile.type !== "application/pdf") {
+      setError(t("terminal.errors.invalidPdf"));
+      return;
+    }
+
+    if (!supabase) {
+      setError(t("terminal.errors.supabaseMissing"));
       return;
     }
 
     setPendingAction("submitBL");
     setError("");
-    setMessage(t("terminal.messages.sendingBL"));
+    setMessage(t("terminal.messages.uploadingDocument"));
 
     try {
       const contract = getContract(signer);
-      const tx = await contract.submitBL(blHashInput);
-      await tx.wait();
-
       const shipmentId = currentShipmentId || (await contract.shipmentCount()).toString();
 
       if (!shipmentId || Number(shipmentId) < 1) {
         throw new Error(t("terminal.errors.noShipmentForBL"));
       }
 
-      if (supabase) {
-        const { error: updateError } = await supabase
-          .from("shipments")
-          .update({ bl_hash: blHashInput })
-          .eq("blockchain_id", Number(shipmentId));
+      let hashHex = "";
+      try {
+        const fileBuffer = await blFile.arrayBuffer();
+        const digest = await window.crypto.subtle.digest("SHA-256", fileBuffer);
+        hashHex = `0x${Array.from(new Uint8Array(digest))
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("")}`;
+      } catch (hashError) {
+        console.error(hashError);
+        throw new Error(t("terminal.errors.hashFailed"));
+      }
 
-        if (updateError) {
-          throw updateError;
-        }
+      const safeFileName = blFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const filePath = `shipments/${shipmentId}/${Date.now()}-${safeFileName}`;
+      const { error: uploadError } = await supabase.storage
+        .from("documents")
+        .upload(filePath, blFile, {
+          cacheControl: "3600",
+          upsert: true,
+          contentType: "application/pdf",
+        });
+
+      if (uploadError) {
+        throw new Error(t("terminal.errors.uploadFailed"));
+      }
+
+      const { data: publicUrlData } = supabase.storage.from("documents").getPublicUrl(filePath);
+      const documentUrl = publicUrlData?.publicUrl || null;
+
+      const tx = await contract.submitBL(hashHex);
+      await tx.wait();
+
+      const { error: updateError } = await supabase
+        .from("shipments")
+        .update({ bl_hash: hashHex, document_url: documentUrl })
+        .eq("blockchain_id", Number(shipmentId));
+
+      if (updateError) {
+        throw updateError;
       }
 
       setMessage(t("terminal.messages.blSuccess", { shipmentId }));
-      setBlHashInput("");
+      setBlFile(null);
       await refreshData();
       await fetchTransactions();
     } catch (submitError) {
       console.error(submitError);
       setError(
-        submitError?.message === t("terminal.errors.noShipmentForBL")
+        submitError?.message === t("terminal.errors.noShipmentForBL") ||
+          submitError?.message === t("terminal.errors.hashFailed") ||
+          submitError?.message === t("terminal.errors.uploadFailed")
           ? submitError.message
           : t("terminal.errors.submitBLFailed")
       );
@@ -308,16 +344,16 @@ function Terminal() {
 
   useEffect(() => {
     fetchTransactions();
-  }, [t]);
+  }, [i18n.language]);
+
+  const handleBLFileChange = (event) => {
+    const selectedFile = event.target.files?.[0] || null;
+    setBlFile(selectedFile);
+  };
 
   return (
     <div className="terminal">
-      <button className="back-btn" onClick={() => navigate("/")}>
-        &larr; {t("terminal.backHome")}
-      </button>
-      <div className="terminal-toolbar">
-        <LanguageSwitcher />
-      </div>
+      <Navbar showBack onBack={() => navigate("/")} />
       <h2>{t("terminal.title")}</h2>
       <div className="app-container">
         <div className="message-bar">
@@ -346,8 +382,8 @@ function Terminal() {
           setDepositAmount={setDepositAmount}
           sellerAddress={sellerAddress}
           setSellerAddress={setSellerAddress}
-          blHashInput={blHashInput}
-          setBlHashInput={setBlHashInput}
+          blFile={blFile}
+          onBLFileChange={handleBLFileChange}
           withdrawId={withdrawId}
           setWithdrawId={setWithdrawId}
           onDeposit={onDeposit}
@@ -378,6 +414,7 @@ function Terminal() {
                     <th>{t("terminal.table.seller")}</th>
                     <th>{t("terminal.table.amount")}</th>
                     <th>{t("terminal.table.blHash")}</th>
+                    <th>{t("terminal.table.document")}</th>
                     <th>{t("terminal.table.status")}</th>
                   </tr>
                 </thead>
@@ -389,6 +426,22 @@ function Terminal() {
                       <td>{formatWallet(tx.seller)}</td>
                       <td>{tx.amount} ETH</td>
                       <td className="history-hash">{tx.bl_hash || t("contract.notSubmitted")}</td>
+                      <td>
+                        {tx.document_url ? (
+                          <a
+                            className="document-link"
+                            href={tx.document_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={t("terminal.document.open")}
+                            aria-label={t("terminal.document.open")}
+                          >
+                            <FileText size={18} />
+                          </a>
+                        ) : (
+                          <span className="document-missing">{t("terminal.document.missing")}</span>
+                        )}
+                      </td>
                       <td>
                         <span
                           className={`status-badge ${

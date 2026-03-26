@@ -1,14 +1,14 @@
 import React from "react";
-import { useI18n } from "../i18n";
+import { useTranslation } from "../i18n";
 
 export default function LanguageSwitcher() {
-  const { language, setLanguage, languages, t } = useI18n();
+  const { t, i18n } = useTranslation();
 
   return (
     <label className="language-switcher" aria-label={t("ui.language")}>
       <span>{t("ui.language")}</span>
-      <select value={language} onChange={(e) => setLanguage(e.target.value)}>
-        {Object.entries(languages).map(([code, label]) => (
+      <select value={i18n.language} onChange={(e) => i18n.changeLanguage(e.target.value)}>
+        {Object.entries(i18n.languages).map(([code, label]) => (
           <option key={code} value={code}>
             {label}
           </option>

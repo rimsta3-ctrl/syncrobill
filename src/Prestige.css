@@ -51,6 +51,10 @@ header {
   align-items: center;
 }
 
+.navbar {
+  z-index: 1000;
+}
+
 header h1 {
   font-size: 1.8rem;
   font-weight: 700;
@@ -297,6 +301,12 @@ header h1::before {
   transform: translateY(-1px);
 }
 
+.navbar-back {
+  position: static;
+  top: auto;
+  left: auto;
+}
+
 .terminal-footer {
   position: absolute;
   bottom: 24px;
@@ -482,6 +492,36 @@ header h1::before {
   transition: border-color 0.2s;
 }
 
+.file-upload input[type="file"] {
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+.file-upload input[type="file"]::file-selector-button {
+  margin-right: 12px;
+  border: 1px solid rgba(181, 143, 65, 0.5);
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: rgba(181, 143, 65, 0.16);
+  color: var(--gold-light);
+  cursor: pointer;
+}
+
+.file-upload-meta {
+  margin-top: 10px;
+  color: var(--gold-light);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+
+.file-upload-hint {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+}
+
 .action-panel input:focus {
   outline: none;
   border-color: var(--gold);
@@ -606,6 +646,31 @@ header h1::before {
   color: var(--text-secondary);
 }
 
+.document-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  color: var(--gold);
+  background: rgba(181, 143, 65, 0.12);
+  border: 1px solid rgba(181, 143, 65, 0.24);
+  transition: all 0.25s ease;
+}
+
+.document-link:hover {
+  color: var(--gold-light);
+  background: rgba(181, 143, 65, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 0 16px rgba(181, 143, 65, 0.2);
+}
+
+.document-missing {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -705,6 +770,11 @@ header h1::before {
     top: 16px;
   }
 
+  .navbar-back {
+    left: auto;
+    top: auto;
+  }
+
   .terminal-toolbar {
     position: static;
     display: flex;
@@ -744,6 +814,10 @@ header h1::before {
 [dir="rtl"] .back-btn {
   left: auto;
   right: 24px;
+}
+
+[dir="rtl"] .navbar-back {
+  right: auto;
 }
 
 [dir="rtl"] .terminal-toolbar {

@@ -1,13 +1,13 @@
 import React from "react";
-import { useI18n } from "../i18n";
+import { useTranslation } from "../i18n";
 
 export default function ActionPanel({
   depositAmount,
   setDepositAmount,
   sellerAddress,
   setSellerAddress,
-  blHashInput,
-  setBlHashInput,
+  blFile,
+  onBLFileChange,
   withdrawId,
   setWithdrawId,
   onDeposit,
@@ -16,7 +16,7 @@ export default function ActionPanel({
   canWithdraw,
   pendingAction,
 }) {
-  const { t } = useI18n();
+  const { t } = useTranslation();
   const isPending = pendingAction.length > 0;
   const isDepositing = pendingAction === "deposit";
   const isSubmittingBL = pendingAction === "submitBL";
@@ -60,17 +60,23 @@ export default function ActionPanel({
         </div>
         <div className="section">
           <h3>{t("actions.exporter")}</h3>
-          <label>
-            {t("actions.blSha")}
-            <input
-              type="text"
-              value={blHashInput}
-              onChange={(e) => setBlHashInput(e.target.value)}
-              placeholder="0x..."
-            />
+          <label className="file-upload">
+            <span>{t("actions.uploadPdf")}</span>
+            <input type="file" accept="application/pdf,.pdf" onChange={onBLFileChange} />
           </label>
+          <div className="file-upload-meta">
+            <strong>{t("actions.selectedFile")}:</strong> {blFile?.name || t("actions.noFileSelected")}
+          </div>
+          <div className="file-upload-hint">{t("actions.uploadHint")}</div>
           <button onClick={onSubmitBL} disabled={isPending} className="btn primary">
-            {isSubmittingBL ? t("actions.inProgress") : t("actions.submitBL")}
+            {isSubmittingBL ? (
+              <span className="btn-loading">
+                <span className="spinner" aria-hidden="true" />
+                {t("actions.uploading")}
+              </span>
+            ) : (
+              t("actions.uploadAndSubmit")
+            )}
           </button>
 
           <label style={{ marginTop: "16px", display: "block" }}>

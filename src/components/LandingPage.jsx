@@ -1,12 +1,12 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import InvestmentIdeas from "./InvestmentIdeas";
-import LanguageSwitcher from "./LanguageSwitcher";
-import { useI18n } from "../i18n";
+import Navbar from "./Navbar";
+import { useTranslation } from "../i18n";
 
 const LandingPage = () => {
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t } = useTranslation();
 
   const scrollToTerminal = () => {
     navigate("/terminal");
@@ -14,15 +14,13 @@ const LandingPage = () => {
 
   return (
     <div className="app-container">
-      <header>
-        <h1>Syncrobill</h1>
-        <div className="header-actions">
-          <LanguageSwitcher />
+      <Navbar
+        action={
           <button className="launch-btn" onClick={() => navigate("/terminal")}>
             {t("landing.launchApp")}
           </button>
-        </div>
-      </header>
+        }
+      />
 
       <section className="hero fade-in">
         <h1>{t("landing.heroTitle")}</h1>
