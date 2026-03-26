@@ -28,6 +28,7 @@ const translations = {
       balance: "Balance",
       network: "Network",
       wrongNetwork: "Wrong network",
+      expectedNetwork: "Sepolia",
       address: "Address",
       notConnected: "Not connected",
       connect: "Connect MetaMask",
@@ -71,15 +72,23 @@ const translations = {
         amount: "Amount",
         blHash: "B/L Hash",
         status: "Status",
+        priority: "Priority",
       },
       status: {
         locked: "Locked",
         released: "Released",
       },
+      priority: {
+        actionRequired: "Action required",
+        readyForWithdrawal: "Ready for withdrawal",
+        none: "On track",
+      },
       errors: {
         historyLoad: "Unable to load Supabase history.",
         contractRead: "Unable to read contract state.",
         balanceNetwork: "Error while reading balance or network.",
+        wrongNetwork:
+          "Please switch MetaMask to Sepolia (Chain ID: 11155111) before continuing.",
         metamaskMissing: "MetaMask is not installed.",
         providerCreate: "Unable to create the MetaMask provider.",
         walletConnect: "Wallet connection failed.",
@@ -97,6 +106,9 @@ const translations = {
       messages: {
         connected: "Connected successfully.",
         sendingDeposit: "Sending deposit transaction...",
+        blockchainPending: "Transaction in progress on the blockchain...",
+        uploadingCloud: "Uploading the document to the cloud...",
+        syncingDatabase: "Synchronizing with the database...",
         depositSuccess: ({ shipmentId }) =>
           `Deposit completed successfully. Shipment #${shipmentId} was saved to Supabase.`,
         sendingBL: "Sending B/L submission transaction...",
@@ -133,6 +145,7 @@ const translations = {
       balance: "Solde",
       network: "Réseau",
       wrongNetwork: "Mauvais réseau",
+      expectedNetwork: "Sepolia",
       address: "Adresse",
       notConnected: "Non connecté",
       connect: "Connecter MetaMask",
@@ -176,15 +189,23 @@ const translations = {
         amount: "Montant",
         blHash: "Hash du B/L",
         status: "Statut",
+        priority: "Priorité",
       },
       status: {
         locked: "Bloqué",
         released: "Libéré",
       },
+      priority: {
+        actionRequired: "Action requise",
+        readyForWithdrawal: "Prêt pour retrait",
+        none: "En cours",
+      },
       errors: {
         historyLoad: "Impossible de charger l'historique Supabase.",
         contractRead: "Impossible de lire l'état du contrat.",
         balanceNetwork: "Erreur lors de la lecture du solde ou du réseau.",
+        wrongNetwork:
+          "Veuillez basculer MetaMask sur Sepolia (Chain ID : 11155111) avant de continuer.",
         metamaskMissing: "MetaMask n'est pas installé.",
         providerCreate: "Impossible de créer le provider MetaMask.",
         walletConnect: "Erreur de connexion au portefeuille.",
@@ -202,6 +223,9 @@ const translations = {
       messages: {
         connected: "Connecté avec succès.",
         sendingDeposit: "Envoi de la transaction de dépôt...",
+        blockchainPending: "Transaction en cours sur la blockchain...",
+        uploadingCloud: "Upload du document vers le cloud...",
+        syncingDatabase: "Synchronisation avec la base de données...",
         depositSuccess: ({ shipmentId }) =>
           `Dépôt effectué avec succès. La shipment #${shipmentId} a été enregistrée dans Supabase.`,
         sendingBL: "Envoi de la transaction de soumission du B/L...",
@@ -238,6 +262,7 @@ const translations = {
       balance: "Kontostand",
       network: "Netzwerk",
       wrongNetwork: "Falsches Netzwerk",
+      expectedNetwork: "Sepolia",
       address: "Adresse",
       notConnected: "Nicht verbunden",
       connect: "MetaMask verbinden",
@@ -281,15 +306,23 @@ const translations = {
         amount: "Betrag",
         blHash: "B/L-Hash",
         status: "Status",
+        priority: "Priorität",
       },
       status: {
         locked: "Gesperrt",
         released: "Freigegeben",
       },
+      priority: {
+        actionRequired: "Aktion erforderlich",
+        readyForWithdrawal: "Bereit zur Auszahlung",
+        none: "Im Plan",
+      },
       errors: {
         historyLoad: "Supabase-Verlauf konnte nicht geladen werden.",
         contractRead: "Vertragsstatus konnte nicht gelesen werden.",
         balanceNetwork: "Fehler beim Lesen von Kontostand oder Netzwerk.",
+        wrongNetwork:
+          "Bitte wechseln Sie MetaMask zu Sepolia (Chain ID: 11155111), bevor Sie fortfahren.",
         metamaskMissing: "MetaMask ist nicht installiert.",
         providerCreate: "MetaMask-Provider konnte nicht erstellt werden.",
         walletConnect: "Wallet-Verbindung fehlgeschlagen.",
@@ -307,6 +340,9 @@ const translations = {
       messages: {
         connected: "Erfolgreich verbunden.",
         sendingDeposit: "Einzahlungstransaktion wird gesendet...",
+        blockchainPending: "Transaktion läuft auf der Blockchain...",
+        uploadingCloud: "Dokument wird in die Cloud hochgeladen...",
+        syncingDatabase: "Datenbank wird synchronisiert...",
         depositSuccess: ({ shipmentId }) =>
           `Einzahlung erfolgreich abgeschlossen. Sendung #${shipmentId} wurde in Supabase gespeichert.`,
         sendingBL: "B/L-Übermittlung wird gesendet...",
@@ -344,6 +380,7 @@ const translations = {
       balance: "Saldo",
       network: "Rete",
       wrongNetwork: "Rete errata",
+      expectedNetwork: "Sepolia",
       address: "Indirizzo",
       notConnected: "Non connesso",
       connect: "Connetti MetaMask",
@@ -387,15 +424,23 @@ const translations = {
         amount: "Importo",
         blHash: "Hash B/L",
         status: "Stato",
+        priority: "Priorità",
       },
       status: {
         locked: "Bloccato",
         released: "Rilasciato",
       },
+      priority: {
+        actionRequired: "Azione richiesta",
+        readyForWithdrawal: "Pronto per il prelievo",
+        none: "In corso",
+      },
       errors: {
         historyLoad: "Impossibile caricare lo storico Supabase.",
         contractRead: "Impossibile leggere lo stato del contratto.",
         balanceNetwork: "Errore durante la lettura del saldo o della rete.",
+        wrongNetwork:
+          "Passa MetaMask a Sepolia (Chain ID: 11155111) prima di continuare.",
         metamaskMissing: "MetaMask non è installato.",
         providerCreate: "Impossibile creare il provider MetaMask.",
         walletConnect: "Connessione al wallet non riuscita.",
@@ -413,6 +458,9 @@ const translations = {
       messages: {
         connected: "Connesso con successo.",
         sendingDeposit: "Invio della transazione di deposito...",
+        blockchainPending: "Transazione in corso sulla blockchain...",
+        uploadingCloud: "Caricamento del documento nel cloud...",
+        syncingDatabase: "Sincronizzazione con il database...",
         depositSuccess: ({ shipmentId }) =>
           `Deposito completato con successo. La spedizione #${shipmentId} è stata salvata in Supabase.`,
         sendingBL: "Invio della transazione B/L...",
@@ -450,6 +498,7 @@ const translations = {
       balance: "Saldo",
       network: "Red",
       wrongNetwork: "Red incorrecta",
+      expectedNetwork: "Sepolia",
       address: "Dirección",
       notConnected: "No conectado",
       connect: "Conectar MetaMask",
@@ -493,15 +542,23 @@ const translations = {
         amount: "Monto",
         blHash: "Hash B/L",
         status: "Estado",
+        priority: "Prioridad",
       },
       status: {
         locked: "Bloqueado",
         released: "Liberado",
       },
+      priority: {
+        actionRequired: "Acción requerida",
+        readyForWithdrawal: "Listo para retiro",
+        none: "En curso",
+      },
       errors: {
         historyLoad: "No se pudo cargar el historial de Supabase.",
         contractRead: "No se pudo leer el estado del contrato.",
         balanceNetwork: "Error al leer el saldo o la red.",
+        wrongNetwork:
+          "Cambia MetaMask a Sepolia (Chain ID: 11155111) antes de continuar.",
         metamaskMissing: "MetaMask no está instalado.",
         providerCreate: "No se pudo crear el provider de MetaMask.",
         walletConnect: "Error al conectar la wallet.",
@@ -519,6 +576,9 @@ const translations = {
       messages: {
         connected: "Conectado correctamente.",
         sendingDeposit: "Enviando transacción de depósito...",
+        blockchainPending: "Transacción en curso en la blockchain...",
+        uploadingCloud: "Subiendo el documento a la nube...",
+        syncingDatabase: "Sincronizando con la base de datos...",
         depositSuccess: ({ shipmentId }) =>
           `Depósito completado correctamente. El envío #${shipmentId} se guardó en Supabase.`,
         sendingBL: "Enviando transacción de B/L...",
@@ -555,6 +615,7 @@ const translations = {
       balance: "الرصيد",
       network: "الشبكة",
       wrongNetwork: "شبكة غير صحيحة",
+      expectedNetwork: "سيبوليا",
       address: "العنوان",
       notConnected: "غير متصل",
       connect: "ربط MetaMask",
@@ -598,15 +659,23 @@ const translations = {
         amount: "المبلغ",
         blHash: "بصمة بوليصة الشحن",
         status: "الحالة",
+        priority: "الأولوية",
       },
       status: {
         locked: "مقفل",
         released: "محرر",
       },
+      priority: {
+        actionRequired: "إجراء مطلوب",
+        readyForWithdrawal: "جاهز للسحب",
+        none: "يسير بشكل جيد",
+      },
       errors: {
         historyLoad: "تعذّر تحميل سجل Supabase.",
         contractRead: "تعذّرت قراءة حالة العقد.",
         balanceNetwork: "حدث خطأ أثناء قراءة الرصيد أو الشبكة.",
+        wrongNetwork:
+          "يرجى تحويل MetaMask إلى شبكة Sepolia (المعرّف: 11155111) قبل المتابعة.",
         metamaskMissing: "MetaMask غير مثبت.",
         providerCreate: "تعذّر إنشاء مزوّد MetaMask.",
         walletConnect: "فشل الاتصال بالمحفظة.",
@@ -624,6 +693,9 @@ const translations = {
       messages: {
         connected: "تم الاتصال بنجاح.",
         sendingDeposit: "جارٍ إرسال معاملة الإيداع...",
+        blockchainPending: "المعاملة قيد التنفيذ على البلوك تشين...",
+        uploadingCloud: "جارٍ رفع المستند إلى السحابة...",
+        syncingDatabase: "جارٍ المزامنة مع قاعدة البيانات...",
         depositSuccess: ({ shipmentId }) =>
           `تم الإيداع بنجاح. تم حفظ الشحنة #${shipmentId} في Supabase.`,
         sendingBL: "جارٍ إرسال معاملة بوليصة الشحن...",

@@ -13,6 +13,18 @@ import Navbar from "./Navbar";
 const formatWallet = (value = "") =>
   value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "-";
 
+const normalizeAddress = (value = "") => value.toLowerCase();
+
+function getReadableError(error, fallback) {
+  return (
+    error?.shortMessage ||
+    error?.reason ||
+    error?.info?.error?.message ||
+    error?.message ||
+    fallback
+  );
+}
+
 function Terminal() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
@@ -31,29 +43,63 @@ function Terminal() {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [toasts, setToasts] = useState([]);
   const [pendingAction, setPendingAction] = useState("");
   const [loadingContract, setLoadingContract] = useState(false);
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
 
+  const addToast = (type, text) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setToasts((current) => [...current, { id, type, text }].slice(-4));
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, 4500);
+  };
+
+  const getPriority = (transaction) => {
+    if (transaction.status === "Released") {
+      return t("terminal.priority.none");
+    }
+
+    if (!transaction.bl_hash) {
+      return t("terminal.priority.actionRequired");
+    }
+
+    return t("terminal.priority.readyForWithdrawal");
+  };
+
   const fetchTransactions = async () => {
-    if (!supabase) return;
+    if (!supabase || !account) {
+      setTransactions([]);
+      return;
+    }
 
     try {
       setLoadingTransactions(true);
       const { data, error: fetchError } = await supabase
         .from("shipments")
         .select("blockchain_id, buyer, seller, amount, bl_hash, document_url, status")
+        .or(`buyer.eq.${account},seller.eq.${account}`)
         .order("blockchain_id", { ascending: false });
 
       if (fetchError) {
         throw fetchError;
       }
 
-      setTransactions(data || []);
+      const normalizedAccount = normalizeAddress(account);
+      setTransactions(
+        (data || []).filter((item) => {
+          const buyer = normalizeAddress(item.buyer || "");
+          const seller = normalizeAddress(item.seller || "");
+          return buyer === normalizedAccount || seller === normalizedAccount;
+        })
+      );
     } catch (fetchTransactionsError) {
       console.error(fetchTransactionsError);
-      setError(t("terminal.errors.historyLoad"));
+      const readableError = getReadableError(fetchTransactionsError, t("terminal.errors.historyLoad"));
+      setError(readableError);
+      addToast("error", readableError);
     } finally {
       setLoadingTransactions(false);
     }
@@ -101,7 +147,9 @@ function Terminal() {
         setBalance(parseFloat(balanceBn.toString() / 1e18).toFixed(4));
       }
     } catch (balanceError) {
-      setError(t("terminal.errors.balanceNetwork"));
+      const readableError = getReadableError(balanceError, t("terminal.errors.balanceNetwork"));
+      setError(readableError);
+      addToast("error", readableError);
       console.error(balanceError);
     }
   };
@@ -111,12 +159,14 @@ function Terminal() {
       setError("");
       if (!window.ethereum) {
         setError(t("terminal.errors.metamaskMissing"));
+        addToast("error", t("terminal.errors.metamaskMissing"));
         return;
       }
 
       const providerInstance = getProvider();
       if (!providerInstance) {
         setError(t("terminal.errors.providerCreate"));
+        addToast("error", t("terminal.errors.providerCreate"));
         return;
       }
 
@@ -128,6 +178,12 @@ function Terminal() {
 
       await updateBalanceAndNetwork(providerInstance, signerInstance);
       await refreshData(providerInstance);
+
+      const currentNetwork = await providerInstance.getNetwork();
+      if (currentNetwork.chainId !== EXPECTED_CHAIN_ID) {
+        setError(t("terminal.errors.wrongNetwork"));
+        addToast("error", t("terminal.errors.wrongNetwork"));
+      }
 
       window.ethereum.on("accountsChanged", async (accounts) => {
         if (accounts.length === 0) {
@@ -145,31 +201,44 @@ function Terminal() {
       });
 
       setMessage(t("terminal.messages.connected"));
+      addToast("success", t("terminal.messages.connected"));
     } catch (connectError) {
       console.error(connectError);
-      setError(t("terminal.errors.walletConnect"));
+      const readableError = getReadableError(connectError, t("terminal.errors.walletConnect"));
+      setError(readableError);
+      addToast("error", readableError);
     }
   };
 
   const onDeposit = async () => {
     if (!signer) {
       setError(t("terminal.errors.connectWalletFirst"));
+      addToast("error", t("terminal.errors.connectWalletFirst"));
+      return;
+    }
+
+    if (!networkOk) {
+      setError(t("terminal.errors.wrongNetwork"));
+      addToast("error", t("terminal.errors.wrongNetwork"));
       return;
     }
 
     if (!depositAmount || Number(depositAmount) <= 0) {
       setError(t("terminal.errors.invalidDepositAmount"));
+      addToast("error", t("terminal.errors.invalidDepositAmount"));
       return;
     }
 
     if (!sellerAddress || !isAddress(sellerAddress)) {
       setError(t("terminal.errors.invalidSellerAddress"));
+      addToast("error", t("terminal.errors.invalidSellerAddress"));
       return;
     }
 
     setPendingAction("deposit");
     setError("");
     setMessage(t("terminal.messages.sendingDeposit"));
+    addToast("info", t("terminal.messages.blockchainPending"));
 
     try {
       const contract = getContract(signer);
@@ -182,6 +251,7 @@ function Terminal() {
       const shipmentId = shipmentCount.toString();
 
       if (supabase) {
+        addToast("info", t("terminal.messages.syncingDatabase"));
         const { error: insertError } = await supabase.from("shipments").insert({
           blockchain_id: Number(shipmentId),
           buyer: buyerAddress,
@@ -198,6 +268,7 @@ function Terminal() {
       }
 
       setMessage(t("terminal.messages.depositSuccess", { shipmentId }));
+      addToast("success", t("terminal.messages.depositSuccess", { shipmentId }));
       setCurrentShipmentId(shipmentId);
       setDepositAmount("");
       setWithdrawId(shipmentId);
@@ -206,7 +277,9 @@ function Terminal() {
       await fetchTransactions();
     } catch (depositError) {
       console.error(depositError);
-      setError(t("terminal.errors.depositFailed"));
+      const readableError = getReadableError(depositError, t("terminal.errors.depositFailed"));
+      setError(readableError);
+      addToast("error", readableError);
     } finally {
       setPendingAction("");
     }
@@ -215,22 +288,32 @@ function Terminal() {
   const onSubmitBL = async () => {
     if (!signer) {
       setError(t("terminal.errors.connectWalletFirst"));
+      addToast("error", t("terminal.errors.connectWalletFirst"));
+      return;
+    }
+
+    if (!networkOk) {
+      setError(t("terminal.errors.wrongNetwork"));
+      addToast("error", t("terminal.errors.wrongNetwork"));
       return;
     }
 
     if (!blFile || blFile.type !== "application/pdf") {
       setError(t("terminal.errors.invalidPdf"));
+      addToast("error", t("terminal.errors.invalidPdf"));
       return;
     }
 
     if (!supabase) {
       setError(t("terminal.errors.supabaseMissing"));
+      addToast("error", t("terminal.errors.supabaseMissing"));
       return;
     }
 
     setPendingAction("submitBL");
     setError("");
     setMessage(t("terminal.messages.uploadingDocument"));
+    addToast("info", t("terminal.messages.uploadingCloud"));
 
     try {
       const contract = getContract(signer);
@@ -269,9 +352,11 @@ function Terminal() {
       const { data: publicUrlData } = supabase.storage.from("documents").getPublicUrl(filePath);
       const documentUrl = publicUrlData?.publicUrl || null;
 
+      addToast("info", t("terminal.messages.blockchainPending"));
       const tx = await contract.submitBL(hashHex);
       await tx.wait();
 
+      addToast("info", t("terminal.messages.syncingDatabase"));
       const { error: updateError } = await supabase
         .from("shipments")
         .update({ bl_hash: hashHex, document_url: documentUrl })
@@ -282,18 +367,20 @@ function Terminal() {
       }
 
       setMessage(t("terminal.messages.blSuccess", { shipmentId }));
+      addToast("success", t("terminal.messages.blSuccess", { shipmentId }));
       setBlFile(null);
       await refreshData();
       await fetchTransactions();
     } catch (submitError) {
       console.error(submitError);
-      setError(
+      const readableError =
         submitError?.message === t("terminal.errors.noShipmentForBL") ||
           submitError?.message === t("terminal.errors.hashFailed") ||
           submitError?.message === t("terminal.errors.uploadFailed")
           ? submitError.message
-          : t("terminal.errors.submitBLFailed")
-      );
+          : getReadableError(submitError, t("terminal.errors.submitBLFailed"));
+      setError(readableError);
+      addToast("error", readableError);
     } finally {
       setPendingAction("");
     }
@@ -302,17 +389,26 @@ function Terminal() {
   const onWithdraw = async () => {
     if (!signer) {
       setError(t("terminal.errors.connectWalletFirst"));
+      addToast("error", t("terminal.errors.connectWalletFirst"));
+      return;
+    }
+
+    if (!networkOk) {
+      setError(t("terminal.errors.wrongNetwork"));
+      addToast("error", t("terminal.errors.wrongNetwork"));
       return;
     }
 
     if (!withdrawId || Number(withdrawId) < 1) {
       setError(t("terminal.errors.invalidShipmentId"));
+      addToast("error", t("terminal.errors.invalidShipmentId"));
       return;
     }
 
     setPendingAction("withdraw");
     setError("");
     setMessage(t("terminal.messages.sendingWithdraw"));
+    addToast("info", t("terminal.messages.blockchainPending"));
 
     try {
       const contract = getContract(signer);
@@ -320,6 +416,7 @@ function Terminal() {
       await tx.wait();
 
       if (supabase) {
+        addToast("info", t("terminal.messages.syncingDatabase"));
         const { error: updateError } = await supabase
           .from("shipments")
           .update({ status: "Released" })
@@ -331,12 +428,15 @@ function Terminal() {
       }
 
       setMessage(t("terminal.messages.withdrawSuccess"));
+      addToast("success", t("terminal.messages.withdrawSuccess"));
       await refreshData();
       await updateBalanceAndNetwork(provider, signer);
       await fetchTransactions();
     } catch (withdrawError) {
       console.error(withdrawError);
-      setError(t("terminal.errors.withdrawFailed"));
+      const readableError = getReadableError(withdrawError, t("terminal.errors.withdrawFailed"));
+      setError(readableError);
+      addToast("error", readableError);
     } finally {
       setPendingAction("");
     }
@@ -344,7 +444,7 @@ function Terminal() {
 
   useEffect(() => {
     fetchTransactions();
-  }, [i18n.language]);
+  }, [i18n.language, account]);
 
   const handleBLFileChange = (event) => {
     const selectedFile = event.target.files?.[0] || null;
@@ -356,6 +456,18 @@ function Terminal() {
       <Navbar showBack onBack={() => navigate("/")} />
       <h2>{t("terminal.title")}</h2>
       <div className="app-container">
+        <div className="toast-stack" aria-live="polite">
+          {toasts.map((toast) => (
+            <div key={toast.id} className={`toast-item ${toast.type}`}>
+              {toast.text}
+            </div>
+          ))}
+        </div>
+
+        {!networkOk && account ? (
+          <div className="network-alert card">{t("terminal.errors.wrongNetwork")}</div>
+        ) : null}
+
         <div className="message-bar">
           {message && <span className="success">{message}</span>}
           {error && <span className="error">{error}</span>}
@@ -415,6 +527,7 @@ function Terminal() {
                     <th>{t("terminal.table.amount")}</th>
                     <th>{t("terminal.table.blHash")}</th>
                     <th>{t("terminal.table.document")}</th>
+                    <th>{t("terminal.table.priority")}</th>
                     <th>{t("terminal.table.status")}</th>
                   </tr>
                 </thead>
@@ -441,6 +554,15 @@ function Terminal() {
                         ) : (
                           <span className="document-missing">{t("terminal.document.missing")}</span>
                         )}
+                      </td>
+                      <td>
+                        <span
+                          className={`priority-badge ${
+                            !tx.bl_hash ? "required" : tx.status === "Released" ? "done" : "ready"
+                          }`}
+                        >
+                          {getPriority(tx)}
+                        </span>
                       </td>
                       <td>
                         <span
