@@ -26,6 +26,35 @@ contract Syncrobil {
         owner = msg.sender;
     }
 
+    // View functions for frontend
+    function status() external view returns (uint8) {
+        return uint8(State.Locked); // Default status
+    }
+
+    function escrowBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+
+    function blHash() external view returns (string memory) {
+        if (shipmentCount > 0) {
+            return shipments[shipmentCount].billOfLadingHash;
+        }
+        return "";
+    }
+
+    // Deposit function (payable)
+    function deposit(uint256 amount) external payable {
+        require(msg.value == amount, "Amount mismatch");
+        // Logic handled in createShipment
+    }
+
+    // Submit B/L hash
+    function submitBL(string memory hash) external {
+        if (shipmentCount > 0) {
+            shipments[shipmentCount].billOfLadingHash = hash;
+        }
+    }
+
     // L'acheteur crée l'expédition et bloque les fonds
     function createShipment(address _seller, string memory _blHash) external payable {
         require(msg.value > 0, "Depot minimum requis");
