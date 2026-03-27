@@ -38,7 +38,7 @@ Pour démarrer le serveur de développement local :
 
 npm run dev
 
-L'application sera accessible par défaut à l'adresse http://localhost:5173.
+
 
 Architecture du Projet
 Smart Contracts : Développés en Solidity et gérés via Hardhat.
