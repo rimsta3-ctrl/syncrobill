@@ -1,7 +1,7 @@
 import hre from "hardhat";
 
 async function main() {
-  console.log("Déploiement du contrat Syncrobil en cours...");
+  console.log("Deploying Syncrobil contract...");
 
   const Syncrobil = await hre.ethers.getContractFactory("Syncrobil");
   const syncrobil = await Syncrobil.deploy();
@@ -9,9 +9,7 @@ async function main() {
   await syncrobil.waitForDeployment();
 
   const address = await syncrobil.getAddress();
-  console.log("------------------------------------------");
-  console.log("SUCCÈS ! Syncrobil déployé à :", address);
-  console.log("------------------------------------------");
+  console.log(`CONTRAT DEPLOYE A L'ADRESSE : ${address}`);
 }
 
 main().catch((error) => {

@@ -1,6 +1,7 @@
 {
   "name": "syncrobill",
   "version": "1.0.0",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "dev": "vite",
@@ -23,9 +24,10 @@
     "@typechain/ethers-v6": "^0.5.1",
     "@typechain/hardhat": "^9.1.0",
     "chai": "^4.5.0",
+    "dotenv": "^16.4.5",
     "ethers": "^6.16.0",
     "hardhat": "^2.22.10",
-    "hardhat-gas-reporter": "^2.3.0",
+    "hardhat-gas-reporter": "^1.0.10",
     "solidity-coverage": "^0.8.17",
     "typechain": "^8.3.2",
     "vite": "^5.0.0"

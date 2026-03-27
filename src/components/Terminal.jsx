@@ -109,25 +109,43 @@ function Terminal() {
     try {
       setLoadingContract(true);
       const providerSafe = providerToUse || provider;
-      if (!providerSafe) return;
+      if (!providerSafe) {
+        setCurrentShipmentId("");
+        setStatus(0);
+        setEscrowBalance("0");
+        setBlHash("");
+        return;
+      }
 
       const contract = getContract(providerSafe);
-      const balanceValue = await contract.escrowBalance();
-      const shipmentCount = await contract.shipmentCount();
+      if (!contract) {
+        setCurrentShipmentId("");
+        setStatus(0);
+        setEscrowBalance("0");
+        setBlHash("");
+        return;
+      }
+
+      const balanceValue = await contract?.escrowBalance?.().catch(() => 0n);
+      const shipmentCount = await contract?.shipmentCount?.().catch(() => 0n);
 
       if (Number(shipmentCount) > 0) {
-        const latestShipment = await contract.shipments(shipmentCount);
+        const latestShipment = await contract?.shipments?.(shipmentCount).catch(() => null);
         setCurrentShipmentId(shipmentCount.toString());
-        setStatus(Number(latestShipment.state));
-        setBlHash(latestShipment.billOfLadingHash || "");
+        setStatus(Number(latestShipment?.state ?? 0));
+        setBlHash(latestShipment?.billOfLadingHash || "");
       } else {
         setCurrentShipmentId("");
         setStatus(0);
         setBlHash("");
       }
 
-      setEscrowBalance(formatEther(balanceValue));
+      setEscrowBalance(formatEther(balanceValue ?? 0n));
     } catch (refreshError) {
+      setCurrentShipmentId("");
+      setStatus(0);
+      setEscrowBalance("0");
+      setBlHash("");
       setError(t("terminal.errors.contractRead"));
       console.error(refreshError);
     } finally {
