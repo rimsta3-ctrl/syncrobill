@@ -374,6 +374,15 @@ header h1::before {
   background: #A67C39;
 }
 
+.wallet-status .btn.connected,
+.wallet-status .btn.connected:hover {
+  background: #3f4a53;
+  color: #b8c0c7;
+  cursor: default;
+  box-shadow: none;
+  transform: none;
+}
+
 .contract-info h2 {
   font-size: 1.4rem;
   font-weight: 600;

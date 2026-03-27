@@ -1,11 +1,30 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LandingPage from './components/LandingPage';
 import Terminal from './components/Terminal';
 import { LanguageProvider } from './i18n';
+import { EXPECTED_CHAIN_ID_HEX, ensureSepoliaNetwork } from './utils/blockchain';
 import './Prestige.css';
 
 function App() {
+  useEffect(() => {
+    const bootstrapMetaMask = async () => {
+      if (!window.ethereum) return;
+
+      try {
+        const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+
+        if (currentChainId?.toLowerCase() !== EXPECTED_CHAIN_ID_HEX) {
+          await ensureSepoliaNetwork();
+        }
+      } catch (error) {
+        console.error('MetaMask bootstrap skipped:', error);
+      }
+    };
+
+    bootstrapMetaMask();
+  }, []);
+
   return (
     <LanguageProvider>
       <Router>

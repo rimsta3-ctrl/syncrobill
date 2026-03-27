@@ -2,7 +2,12 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatEther, isAddress, parseEther } from "ethers";
 import { FileText } from "lucide-react";
-import { getProvider, getContract, EXPECTED_CHAIN_ID } from "../utils/blockchain";
+import {
+  getProvider,
+  getContract,
+  EXPECTED_CHAIN_ID,
+  ensureSepoliaNetwork,
+} from "../utils/blockchain";
 import { supabase } from "../supabaseClient";
 import { useTranslation } from "../i18n";
 import WalletStatus from "./WalletStatus";
@@ -16,6 +21,10 @@ const formatWallet = (value = "") =>
 const normalizeAddress = (value = "") => value.toLowerCase();
 
 function getReadableError(error, fallback) {
+  if (error?.message?.includes("could not coalesce error")) {
+    return fallback;
+  }
+
   return (
     error?.shortMessage ||
     error?.reason ||
@@ -109,7 +118,9 @@ function Terminal() {
     try {
       setLoadingContract(true);
       const providerSafe = providerToUse || provider;
-      if (!providerSafe) {
+      const signerSafe = signer;
+
+      if (!providerSafe || !signerSafe) {
         setCurrentShipmentId("");
         setStatus(0);
         setEscrowBalance("0");
@@ -146,7 +157,7 @@ function Terminal() {
       setStatus(0);
       setEscrowBalance("0");
       setBlHash("");
-      setError(t("terminal.errors.contractRead"));
+      setError("");
       console.error(refreshError);
     } finally {
       setLoadingContract(false);
@@ -162,7 +173,7 @@ function Terminal() {
         const address = await signerToUse.getAddress();
         setAccount(address);
         const balanceBn = await providerInstance.getBalance(address);
-        setBalance(parseFloat(balanceBn.toString() / 1e18).toFixed(4));
+        setBalance(Number(formatEther(balanceBn)).toFixed(4));
       }
     } catch (balanceError) {
       const readableError = getReadableError(balanceError, t("terminal.errors.balanceNetwork"));
@@ -188,6 +199,11 @@ function Terminal() {
         return;
       }
 
+      const network = await providerInstance.getNetwork();
+      if (network.chainId !== EXPECTED_CHAIN_ID) {
+        await ensureSepoliaNetwork();
+      }
+
       await providerInstance.send("eth_requestAccounts", []);
       const signerInstance = await providerInstance.getSigner();
 
@@ -199,8 +215,7 @@ function Terminal() {
 
       const currentNetwork = await providerInstance.getNetwork();
       if (currentNetwork.chainId !== EXPECTED_CHAIN_ID) {
-        setError(t("terminal.errors.wrongNetwork"));
-        addToast("error", t("terminal.errors.wrongNetwork"));
+        setError("");
       }
 
       window.ethereum.on("accountsChanged", async (accounts) => {
@@ -222,7 +237,10 @@ function Terminal() {
       addToast("success", t("terminal.messages.connected"));
     } catch (connectError) {
       console.error(connectError);
-      const readableError = getReadableError(connectError, t("terminal.errors.walletConnect"));
+      const readableError =
+        connectError?.code === 4001
+          ? "MetaMask connection request was rejected."
+          : getReadableError(connectError, t("terminal.errors.walletConnect"));
       setError(readableError);
       addToast("error", readableError);
     }
@@ -295,7 +313,12 @@ function Terminal() {
       await fetchTransactions();
     } catch (depositError) {
       console.error(depositError);
-      const readableError = getReadableError(depositError, t("terminal.errors.depositFailed"));
+      const readableError =
+        depositError?.code === 4001
+          ? "Transaction rejected in MetaMask."
+          : depositError?.message?.toLowerCase().includes("insufficient funds")
+            ? "Not enough SepoliaETH to complete this deposit."
+            : getReadableError(depositError, t("terminal.errors.depositFailed"));
       setError(readableError);
       addToast("error", readableError);
     } finally {
@@ -392,6 +415,9 @@ function Terminal() {
     } catch (submitError) {
       console.error(submitError);
       const readableError =
+        submitError?.code === 4001
+          ? "Transaction rejected in MetaMask."
+          :
         submitError?.message === t("terminal.errors.noShipmentForBL") ||
           submitError?.message === t("terminal.errors.hashFailed") ||
           submitError?.message === t("terminal.errors.uploadFailed")
@@ -452,7 +478,12 @@ function Terminal() {
       await fetchTransactions();
     } catch (withdrawError) {
       console.error(withdrawError);
-      const readableError = getReadableError(withdrawError, t("terminal.errors.withdrawFailed"));
+      const readableError =
+        withdrawError?.code === 4001
+          ? "Transaction rejected in MetaMask."
+          : withdrawError?.message?.toLowerCase().includes("insufficient funds")
+            ? "Not enough SepoliaETH to cover gas for this withdrawal."
+            : getReadableError(withdrawError, t("terminal.errors.withdrawFailed"));
       setError(readableError);
       addToast("error", readableError);
     } finally {
@@ -463,6 +494,11 @@ function Terminal() {
   useEffect(() => {
     fetchTransactions();
   }, [i18n.language, account]);
+
+  useEffect(() => {
+    if (!provider || !signer) return;
+    refreshData(provider);
+  }, [provider, signer]);
 
   const handleBLFileChange = (event) => {
     const selectedFile = event.target.files?.[0] || null;
