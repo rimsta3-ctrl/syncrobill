@@ -16,15 +16,13 @@ Node.js (version 18 ou supérieure)
 Portefeuille MetaMask configuré sur le réseau de test Sepolia
 
 Solde en Sepolia ETH pour couvrir les frais de gaz
+
 --shell 
 Installation
 Installation des dépendances :
 npm install --legacy-peer-deps
 
-Configuration de l'environnement :
-Créez un fichier nommé .env à la racine du projet et renseignez les variables suivantes :
-VITE_RPC_URL=votre_url_rpc_infura_ou_alchemy
-VITE_PRIVATE_KEY=votre_cle_privee_metamask
+
 
 Déploiement du Smart Contract
 Pour déployer le contrat sur le réseau Sepolia, utilisez la commande suivante :
