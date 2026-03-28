@@ -347,6 +347,21 @@ header h1::before {
   gap: 8px;
 }
 
+.network-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.network-live-badge {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #28c76f;
+  box-shadow: 0 0 0 4px rgba(40, 199, 111, 0.16), 0 0 14px rgba(40, 199, 111, 0.55);
+  flex-shrink: 0;
+}
+
 .wallet-status .info::before {
   font-size: 1.2rem;
 }
@@ -704,6 +719,21 @@ header h1::before {
   color: var(--text-secondary);
 }
 
+.history-id-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gold-light);
+  text-decoration: none;
+  font-weight: 700;
+  transition: color 0.25s ease, transform 0.25s ease;
+}
+
+.history-id-link:hover {
+  color: var(--gold);
+  transform: translateY(-1px);
+}
+
 .document-link {
   display: inline-flex;
   align-items: center;
@@ -782,6 +812,33 @@ header h1::before {
   background: rgba(40, 167, 69, 0.14);
   color: #8ef0a7;
   border-color: rgba(40, 167, 69, 0.28);
+}
+
+.status-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-explorer-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border: 1px solid rgba(181, 143, 65, 0.24);
+  background: rgba(181, 143, 65, 0.08);
+  transition: all 0.25s ease;
+}
+
+.status-explorer-link:hover {
+  color: var(--gold-light);
+  border-color: rgba(181, 143, 65, 0.45);
+  background: rgba(181, 143, 65, 0.16);
+  transform: translateY(-1px);
 }
 
 .empty-history {

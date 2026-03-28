@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatEther, isAddress, parseEther } from "ethers";
-import { FileText } from "lucide-react";
+import { ExternalLink, FileText } from "lucide-react";
 import {
+  CONTRACT_ADDRESS,
   getProvider,
   getContract,
   EXPECTED_CHAIN_ID,
@@ -19,6 +20,7 @@ const formatWallet = (value = "") =>
   value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "-";
 
 const normalizeAddress = (value = "") => value.toLowerCase();
+const contractExplorerUrl = `https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`;
 
 function getReadableError(error, fallback) {
   if (error?.message?.includes("could not coalesce error")) {
@@ -588,7 +590,19 @@ function Terminal() {
                 <tbody>
                   {transactions.map((tx) => (
                     <tr key={tx.blockchain_id}>
-                      <td>#{tx.blockchain_id}</td>
+                      <td>
+                        <a
+                          className="history-id-link"
+                          href={contractExplorerUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={`Open Syncrobill contract on Sepolia Etherscan for shipment #${tx.blockchain_id}`}
+                          aria-label={`Open Syncrobill contract on Sepolia Etherscan for shipment #${tx.blockchain_id}`}
+                        >
+                          <span>#{tx.blockchain_id}</span>
+                          <ExternalLink size={14} strokeWidth={2} />
+                        </a>
+                      </td>
                       <td>{formatWallet(tx.buyer)}</td>
                       <td>{formatWallet(tx.seller)}</td>
                       <td>{tx.amount} ETH</td>
@@ -619,15 +633,27 @@ function Terminal() {
                         </span>
                       </td>
                       <td>
-                        <span
-                          className={`status-badge ${
-                            tx.status === "Released" ? "released" : "locked"
-                          }`}
-                        >
-                          {tx.status === "Released"
-                            ? t("terminal.status.released")
-                            : t("terminal.status.locked")}
-                        </span>
+                        <div className="status-cell">
+                          <span
+                            className={`status-badge ${
+                              tx.status === "Released" ? "released" : "locked"
+                            }`}
+                          >
+                            {tx.status === "Released"
+                              ? t("terminal.status.released")
+                              : t("terminal.status.locked")}
+                          </span>
+                          <a
+                            className="status-explorer-link"
+                            href={contractExplorerUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="View contract activity on Sepolia Etherscan"
+                            aria-label="View contract activity on Sepolia Etherscan"
+                          >
+                            <ExternalLink size={14} strokeWidth={2} />
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   ))}

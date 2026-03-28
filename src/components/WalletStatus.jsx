@@ -21,7 +21,17 @@ export default function WalletStatus({ address, balance, networkOk, onConnect, e
         <strong>{t("wallet.balance")}:</strong> {balance} SEP
       </div>
       <div className="info network">
-        <strong>{t("wallet.network")}:</strong> {networkLabel}
+        <strong>{t("wallet.network")}:</strong>
+        <span className="network-status">
+          {networkLabel}
+          {isConnected && networkOk ? (
+            <span
+              className="network-live-badge"
+              aria-label="Sepolia live connection"
+              title="Sepolia live connection"
+            />
+          ) : null}
+        </span>
       </div>
       <div className="info">
         <strong>{t("wallet.address")}:</strong> {address ? shortAddress(address) : t("wallet.notConnected")}
