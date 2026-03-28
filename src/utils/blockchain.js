@@ -1,8 +1,6 @@
 import { BrowserProvider, Contract } from "ethers";
-import syncrobilArtifact from "../../artifacts/contracts/syncrobill.sol/Syncrobil.json";
+import { CONTRACT_ADDRESS, RESOLVED_CONTRACT_ABI } from "../constants";
 
-export const CONTRACT_ADDRESS =
-  import.meta.env.VITE_CONTRACT_ADDRESS || "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 export const EXPECTED_CHAIN_ID = 11155111n;
 export const EXPECTED_CHAIN_ID_HEX = "0xaa36a7";
 export const SEPOLIA_NETWORK_CONFIG = {
@@ -17,15 +15,17 @@ export const SEPOLIA_NETWORK_CONFIG = {
   blockExplorerUrls: ["https://sepolia.etherscan.io"],
 };
 
-const abi = syncrobilArtifact.abi;
-
 export function getProvider() {
   if (!window.ethereum) return null;
   return new BrowserProvider(window.ethereum);
 }
 
 export function getContract(providerOrSigner) {
-  return new Contract(CONTRACT_ADDRESS, abi, providerOrSigner);
+  if (!Array.isArray(RESOLVED_CONTRACT_ABI) || RESOLVED_CONTRACT_ABI.length === 0) {
+    throw new Error("Syncrobill ABI is missing or malformed.");
+  }
+
+  return new Contract(CONTRACT_ADDRESS, RESOLVED_CONTRACT_ABI, providerOrSigner);
 }
 
 export async function getChainId(provider) {

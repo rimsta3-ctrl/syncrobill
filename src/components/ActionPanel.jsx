@@ -19,8 +19,14 @@ export default function ActionPanel({
   const { t } = useTranslation();
   const isPending = pendingAction.length > 0;
   const isDepositing = pendingAction === "deposit";
-  const isSubmittingBL = pendingAction === "submitBL";
+  const isSubmittingBL = pendingAction === "submitBL" || pendingAction === "aiValidation" || pendingAction === "blockchainSignature";
   const isWithdrawing = pendingAction === "withdraw";
+  const submitLabel =
+    pendingAction === "aiValidation"
+      ? "Analyse IA en cours..."
+      : pendingAction === "blockchainSignature"
+        ? "Signature Blockchain..."
+        : t("actions.uploading");
 
   return (
     <div className="action-panel card">
@@ -72,7 +78,7 @@ export default function ActionPanel({
             {isSubmittingBL ? (
               <span className="btn-loading">
                 <span className="spinner" aria-hidden="true" />
-                {t("actions.uploading")}
+                {submitLabel}
               </span>
             ) : (
               t("actions.uploadAndSubmit")

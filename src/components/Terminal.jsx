@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { formatEther, isAddress, parseEther } from "ethers";
+import { formatEther, getBytes, isAddress, parseEther } from "ethers";
 import { ExternalLink, FileText } from "lucide-react";
+import { CONTRACT_ADDRESS } from "../constants";
 import {
-  CONTRACT_ADDRESS,
   getProvider,
   getContract,
   EXPECTED_CHAIN_ID,
@@ -21,6 +21,16 @@ const formatWallet = (value = "") =>
 
 const normalizeAddress = (value = "") => value.toLowerCase();
 const contractExplorerUrl = `https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`;
+const BL_VALIDATION_API_URL = "http://localhost:8000/validate-bl";
+const EMPTY_BYTES32 = `0x${"0".repeat(64)}`;
+
+const normalizeHash = (value = "") => {
+  if (!value || value === EMPTY_BYTES32) {
+    return "";
+  }
+
+  return value;
+};
 
 function getReadableError(error, fallback) {
   if (error?.message?.includes("could not coalesce error")) {
@@ -46,6 +56,7 @@ function Terminal() {
   const [status, setStatus] = useState(0);
   const [escrowBalance, setEscrowBalance] = useState("0");
   const [blHash, setBlHash] = useState("");
+  const [isValidatedByAI, setIsValidatedByAI] = useState(false);
   const [sellerAddress, setSellerAddress] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const [blFile, setBlFile] = useState(null);
@@ -60,6 +71,27 @@ function Terminal() {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
 
+  const syncShipmentState = async (providerToUse, shipmentIdToLoad) => {
+    const providerSafe = providerToUse || provider;
+    if (!providerSafe) {
+      return;
+    }
+
+    const contract = getContract(providerSafe);
+    if (!contract) {
+      return;
+    }
+
+    const shipment = await contract.shipments(Number(shipmentIdToLoad));
+    const balanceValue = await contract.escrowBalance().catch(() => 0n);
+
+    setCurrentShipmentId(String(shipmentIdToLoad));
+    setStatus(Number(shipment?.state ?? 0));
+    setBlHash(normalizeHash(shipment?.billOfLadingHash));
+    setIsValidatedByAI(Boolean(shipment?.isValidatedByAI));
+    setEscrowBalance(formatEther(balanceValue ?? 0n));
+  };
+
   const addToast = (type, text) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setToasts((current) => [...current, { id, type, text }].slice(-4));
@@ -71,6 +103,10 @@ function Terminal() {
   const getPriority = (transaction) => {
     if (transaction.status === "Released") {
       return t("terminal.priority.none");
+    }
+
+    if (transaction.status === "Validated") {
+      return "AI approved";
     }
 
     if (!transaction.bl_hash) {
@@ -116,7 +152,7 @@ function Terminal() {
     }
   };
 
-  const refreshData = async (providerToUse) => {
+  const refreshData = async (providerToUse, shipmentIdOverride = "") => {
     try {
       setLoadingContract(true);
       const providerSafe = providerToUse || provider;
@@ -127,6 +163,7 @@ function Terminal() {
         setStatus(0);
         setEscrowBalance("0");
         setBlHash("");
+        setIsValidatedByAI(false);
         return;
       }
 
@@ -136,21 +173,25 @@ function Terminal() {
         setStatus(0);
         setEscrowBalance("0");
         setBlHash("");
+        setIsValidatedByAI(false);
         return;
       }
 
       const balanceValue = await contract?.escrowBalance?.().catch(() => 0n);
       const shipmentCount = await contract?.shipmentCount?.().catch(() => 0n);
+      const targetShipmentId = shipmentIdOverride || currentShipmentId || shipmentCount.toString();
 
-      if (Number(shipmentCount) > 0) {
-        const latestShipment = await contract?.shipments?.(shipmentCount).catch(() => null);
-        setCurrentShipmentId(shipmentCount.toString());
-        setStatus(Number(latestShipment?.state ?? 0));
-        setBlHash(latestShipment?.billOfLadingHash || "");
+      if (Number(targetShipmentId) > 0) {
+        const targetShipment = await contract?.shipments?.(BigInt(targetShipmentId)).catch(() => null);
+        setCurrentShipmentId(String(targetShipmentId));
+        setStatus(Number(targetShipment?.state ?? 0));
+        setBlHash(normalizeHash(targetShipment?.billOfLadingHash));
+        setIsValidatedByAI(Boolean(targetShipment?.isValidatedByAI));
       } else {
         setCurrentShipmentId("");
         setStatus(0);
         setBlHash("");
+        setIsValidatedByAI(false);
       }
 
       setEscrowBalance(formatEther(balanceValue ?? 0n));
@@ -159,6 +200,7 @@ function Terminal() {
       setStatus(0);
       setEscrowBalance("0");
       setBlHash("");
+      setIsValidatedByAI(false);
       setError("");
       console.error(refreshError);
     } finally {
@@ -282,7 +324,7 @@ function Terminal() {
       const contract = getContract(signer);
       const buyerAddress = await signer.getAddress();
       const ethValue = parseEther(depositAmount.toString());
-      const tx = await contract.createShipment(sellerAddress, "", { value: ethValue });
+      const tx = await contract.createShipment(sellerAddress, { value: ethValue });
       await tx.wait();
 
       const shipmentCount = await contract.shipmentCount();
@@ -310,7 +352,7 @@ function Terminal() {
       setCurrentShipmentId(shipmentId);
       setDepositAmount("");
       setWithdrawId(shipmentId);
-      await refreshData();
+      await refreshData(provider, shipmentId);
       await updateBalanceAndNetwork(provider, signer);
       await fetchTransactions();
     } catch (depositError) {
@@ -347,16 +389,10 @@ function Terminal() {
       return;
     }
 
-    if (!supabase) {
-      setError(t("terminal.errors.supabaseMissing"));
-      addToast("error", t("terminal.errors.supabaseMissing"));
-      return;
-    }
-
-    setPendingAction("submitBL");
+    setPendingAction("aiValidation");
     setError("");
-    setMessage(t("terminal.messages.uploadingDocument"));
-    addToast("info", t("terminal.messages.uploadingCloud"));
+    setMessage("Analyse IA en cours...");
+    addToast("info", "Analyse IA du Bill of Lading en cours...");
 
     try {
       const contract = getContract(signer);
@@ -366,65 +402,108 @@ function Terminal() {
         throw new Error(t("terminal.errors.noShipmentForBL"));
       }
 
-      let hashHex = "";
+      const shipment = await contract.shipments(Number(shipmentId));
+      const expectedAmount = formatEther(shipment?.value ?? 0n);
+
+      const validationPayload = new FormData();
+      validationPayload.append("file", blFile);
+      validationPayload.append("expected_amount", expectedAmount);
+
+      const validationResponse = await fetch(BL_VALIDATION_API_URL, {
+        method: "POST",
+        body: validationPayload,
+      });
+
+      let validationResult = null;
       try {
-        const fileBuffer = await blFile.arrayBuffer();
-        const digest = await window.crypto.subtle.digest("SHA-256", fileBuffer);
-        hashHex = `0x${Array.from(new Uint8Array(digest))
-          .map((byte) => byte.toString(16).padStart(2, "0"))
-          .join("")}`;
-      } catch (hashError) {
-        console.error(hashError);
-        throw new Error(t("terminal.errors.hashFailed"));
+        validationResult = await validationResponse.json();
+      } catch (parseError) {
+        console.error(parseError);
       }
 
-      const safeFileName = blFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const filePath = `shipments/${shipmentId}/${Date.now()}-${safeFileName}`;
-      const { error: uploadError } = await supabase.storage
-        .from("documents")
-        .upload(filePath, blFile, {
-          cacheControl: "3600",
-          upsert: true,
-          contentType: "application/pdf",
-        });
-
-      if (uploadError) {
-        throw new Error(t("terminal.errors.uploadFailed"));
+      if (!validationResponse.ok) {
+        throw new Error(validationResult?.detail || "IA validation service is unavailable.");
       }
 
-      const { data: publicUrlData } = supabase.storage.from("documents").getPublicUrl(filePath);
-      const documentUrl = publicUrlData?.publicUrl || null;
+      if (!validationResult?.valid) {
+        const rejectionReasons = validationResult?.metadata?.validation_errors?.join(" ") || "IA Rejection";
+        throw new Error(rejectionReasons);
+      }
 
-      addToast("info", t("terminal.messages.blockchainPending"));
-      const tx = await contract.submitBL(hashHex);
+      const hashHex = validationResult?.hash;
+      const signatureHex = validationResult?.signature;
+
+      if (!hashHex || !signatureHex) {
+        throw new Error("The validation service returned an incomplete signature payload.");
+      }
+
+      if (!/^0x[a-fA-F0-9]{64}$/.test(hashHex)) {
+        throw new Error("The validation service returned an invalid bytes32 hash.");
+      }
+
+      let documentUrl = null;
+      if (supabase) {
+        const safeFileName = blFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const filePath = `shipments/${shipmentId}/${Date.now()}-${safeFileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("documents")
+          .upload(filePath, blFile, {
+            cacheControl: "3600",
+            upsert: true,
+            contentType: "application/pdf",
+          });
+
+        if (uploadError) {
+          throw new Error(t("terminal.errors.uploadFailed"));
+        }
+
+        const { data: publicUrlData } = supabase.storage.from("documents").getPublicUrl(filePath);
+        documentUrl = publicUrlData?.publicUrl || null;
+      }
+
+      setPendingAction("blockchainSignature");
+      setMessage("Signature Blockchain...");
+      addToast("info", "Signature IA validée. Ouverture de MetaMask...");
+
+      const tx = await contract.submitBL(BigInt(shipmentId), hashHex, getBytes(signatureHex));
       await tx.wait();
 
-      addToast("info", t("terminal.messages.syncingDatabase"));
-      const { error: updateError } = await supabase
-        .from("shipments")
-        .update({ bl_hash: hashHex, document_url: documentUrl })
-        .eq("blockchain_id", Number(shipmentId));
+      // Reflect the confirmed on-chain state immediately, even before any async refetch completes.
+      setCurrentShipmentId(String(shipmentId));
+      setWithdrawId(String(shipmentId));
+      setBlHash(hashHex);
+      setIsValidatedByAI(true);
+      setStatus((currentStatus) => (currentStatus < 1 ? 1 : currentStatus));
 
-      if (updateError) {
-        throw updateError;
+      if (supabase) {
+        addToast("info", t("terminal.messages.syncingDatabase"));
+        const { error: updateError } = await supabase
+          .from("shipments")
+          .update({ bl_hash: hashHex, document_url: documentUrl, status: "Validated" })
+          .eq("blockchain_id", Number(shipmentId));
+
+        if (updateError) {
+          throw updateError;
+        }
       }
 
       setMessage(t("terminal.messages.blSuccess", { shipmentId }));
       addToast("success", t("terminal.messages.blSuccess", { shipmentId }));
       setBlFile(null);
-      await refreshData();
+      await refreshData(provider, shipmentId);
       await fetchTransactions();
     } catch (submitError) {
       console.error(submitError);
       const readableError =
         submitError?.code === 4001
           ? "Transaction rejected in MetaMask."
-          :
-        submitError?.message === t("terminal.errors.noShipmentForBL") ||
-          submitError?.message === t("terminal.errors.hashFailed") ||
-          submitError?.message === t("terminal.errors.uploadFailed")
-          ? submitError.message
-          : getReadableError(submitError, t("terminal.errors.submitBLFailed"));
+          : submitError?.message === t("terminal.errors.noShipmentForBL") ||
+              submitError?.message === t("terminal.errors.uploadFailed") ||
+              submitError?.message?.includes("IA Rejection") ||
+              submitError?.message?.includes("Missing required") ||
+              submitError?.message?.includes("Expected amount")
+            ? submitError.message
+            : getReadableError(submitError, t("terminal.errors.submitBLFailed"));
       setError(readableError);
       addToast("error", readableError);
     } finally {
@@ -502,6 +581,29 @@ function Terminal() {
     refreshData(provider);
   }, [provider, signer]);
 
+  useEffect(() => {
+    if (!provider) return;
+
+    const contract = getContract(provider);
+    if (!contract) return;
+
+    const handleBLValidated = async (validatedShipmentId) => {
+      const nextShipmentId = validatedShipmentId?.toString?.() || "";
+      if (!nextShipmentId) return;
+
+      setMessage(`Shipment #${nextShipmentId} validated on-chain.`);
+      addToast("success", `Shipment #${nextShipmentId} passed blockchain validation.`);
+      await refreshData(provider, nextShipmentId);
+      await fetchTransactions();
+    };
+
+    contract.on("BLValidated", handleBLValidated);
+
+    return () => {
+      contract.off("BLValidated", handleBLValidated);
+    };
+  }, [provider, account]);
+
   const handleBLFileChange = (event) => {
     const selectedFile = event.target.files?.[0] || null;
     setBlFile(selectedFile);
@@ -542,6 +644,7 @@ function Terminal() {
           status={status}
           escrowBalance={escrowBalance}
           blHash={blHash}
+          isValidatedByAI={isValidatedByAI}
           loading={loadingContract}
         />
 
@@ -560,7 +663,7 @@ function Terminal() {
           canWithdraw={
             status === 1 &&
             Number(escrowBalance) > 0 &&
-            blHash.length > 0 &&
+            isValidatedByAI &&
             withdrawId.trim().length > 0
           }
           pendingAction={pendingAction}
@@ -636,12 +739,18 @@ function Terminal() {
                         <div className="status-cell">
                           <span
                             className={`status-badge ${
-                              tx.status === "Released" ? "released" : "locked"
+                              tx.status === "Released"
+                                ? "released"
+                                : tx.status === "Validated"
+                                  ? "validated"
+                                  : "locked"
                             }`}
                           >
                             {tx.status === "Released"
                               ? t("terminal.status.released")
-                              : t("terminal.status.locked")}
+                              : tx.status === "Validated"
+                                ? "Validated"
+                                : t("terminal.status.locked")}
                           </span>
                           <a
                             className="status-explorer-link"
