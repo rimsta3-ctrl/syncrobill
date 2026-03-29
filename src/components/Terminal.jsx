@@ -54,10 +54,10 @@ function Terminal() {
   const [networkOk, setNetworkOk] = useState(false);
   const [shipment, setShipment] = useState({
     id: "",
-
     status: 0,
     blHash: "",
     isValidatedByAI: false,
+    depositedAmount: "0",
   });
   const [escrowBalance, setEscrowBalance] = useState("0");
   const [sellerAddress, setSellerAddress] = useState("");
@@ -78,6 +78,7 @@ function Terminal() {
   const status = shipment.status;
   const blHash = shipment.blHash;
   const isValidatedByAI = shipment.isValidatedByAI;
+  const depositedAmount = shipment.depositedAmount;
   const waitForUiRefresh = (delayMs = 450) =>
     new Promise((resolve) => {
       window.setTimeout(resolve, delayMs);
@@ -88,12 +89,14 @@ function Terminal() {
     status: nextStatus = 0,
     blHash: nextBlHash = "",
     isValidatedByAI: nextIsValidatedByAI = false,
+    depositedAmount: nextDepositedAmount = "0",
   } = {}) => {
     setShipment({
       id: id ? String(id) : "",
       status: Number(nextStatus ?? 0),
       blHash: normalizeHash(nextBlHash),
       isValidatedByAI: Boolean(nextIsValidatedByAI),
+      depositedAmount: String(nextDepositedAmount ?? "0"),
     });
   };
 
@@ -111,6 +114,7 @@ function Terminal() {
       status: shipmentDetails?.state,
       blHash: shipmentDetails?.billOfLadingHash,
       isValidatedByAI: shipmentDetails?.isValidatedByAI,
+      depositedAmount: formatEther(shipmentDetails?.value ?? 0n),
     });
     setEscrowBalance(formatEther(balanceValue ?? 0n));
 
@@ -186,38 +190,43 @@ function Terminal() {
       if (!providerSafe || !signerSafe) {
         applyShipmentState();
         setEscrowBalance("0");
-        return;
+        return { balance: "0", shipment: null };
       }
 
       const contract = getContract(providerSafe);
       if (!contract) {
         applyShipmentState();
         setEscrowBalance("0");
-        return;
+        return { balance: "0", shipment: null };
       }
 
       const balanceValue = await contract?.escrowBalance?.().catch(() => 0n);
       const shipmentCount = await contract?.shipmentCount?.().catch(() => 0n);
       const targetShipmentId = shipmentIdOverride || currentShipmentId || shipmentCount.toString();
+      const formattedBalance = formatEther(balanceValue ?? 0n);
+      let targetShipment = null;
 
       if (Number(targetShipmentId) > 0) {
-        const targetShipment = await contract?.shipments?.(BigInt(targetShipmentId)).catch(() => null);
+        targetShipment = await contract?.shipments?.(BigInt(targetShipmentId)).catch(() => null);
         applyShipmentState({
           id: targetShipmentId,
           status: targetShipment?.state,
           blHash: targetShipment?.billOfLadingHash,
           isValidatedByAI: targetShipment?.isValidatedByAI,
+          depositedAmount: formatEther(targetShipment?.value ?? 0n),
         });
       } else {
         applyShipmentState();
       }
 
-      setEscrowBalance(formatEther(balanceValue ?? 0n));
+      setEscrowBalance(formattedBalance);
+      return { balance: formattedBalance, shipment: targetShipment };
     } catch (refreshError) {
       applyShipmentState();
       setEscrowBalance("0");
       setError("");
       console.error(refreshError);
+      return { balance: "0", shipment: null };
     } finally {
       setLoadingContract(false);
     }
@@ -364,7 +373,7 @@ function Terminal() {
 
       setMessage(t("terminal.messages.depositSuccess", { shipmentId }));
       addToast("success", t("terminal.messages.depositSuccess", { shipmentId }));
-      applyShipmentState({ id: shipmentId, status: 1 });
+      applyShipmentState({ id: shipmentId, status: 1, depositedAmount: depositAmount });
       setDepositAmount("");
       setWithdrawId(shipmentId);
       await refreshData(provider, shipmentId);
@@ -541,6 +550,8 @@ function Terminal() {
   };
 
   const onWithdraw = async () => {
+    const targetWithdrawId = (withdrawId || currentShipmentId || "").toString();
+
     if (!signer) {
       setError(t("terminal.errors.connectWalletFirst"));
       addToast("error", t("terminal.errors.connectWalletFirst"));
@@ -553,7 +564,7 @@ function Terminal() {
       return;
     }
 
-    if (!withdrawId || Number(withdrawId) < 1) {
+    if (!targetWithdrawId || Number(targetWithdrawId) < 1) {
       setError(t("terminal.errors.invalidShipmentId"));
       addToast("error", t("terminal.errors.invalidShipmentId"));
       return;
@@ -566,7 +577,7 @@ function Terminal() {
 
     try {
       const contract = getContract(signer);
-      const tx = await contract.withdraw(Number(withdrawId));
+      const tx = await contract.withdraw(Number(targetWithdrawId));
       await tx.wait();
 
       if (supabase) {
@@ -574,16 +585,23 @@ function Terminal() {
         const { error: updateError } = await supabase
           .from("shipments")
           .update({ status: "Released" })
-          .eq("blockchain_id", Number(withdrawId));
+          .eq("blockchain_id", Number(targetWithdrawId));
 
         if (updateError) {
           throw updateError;
         }
       }
 
-      setMessage(t("terminal.messages.withdrawSuccess"));
-      addToast("success", t("terminal.messages.withdrawSuccess"));
-      await refreshData();
+      const refreshedData = await refreshData(provider, targetWithdrawId);
+      if (Number(refreshedData?.balance ?? 0) === 0) {
+        const zeroBalanceMessage = `${t("terminal.messages.withdrawSuccess")} Escrow balance reached zero.`;
+        setMessage(zeroBalanceMessage);
+        addToast("success", zeroBalanceMessage);
+      } else {
+        setMessage(t("terminal.messages.withdrawSuccess"));
+        addToast("success", t("terminal.messages.withdrawSuccess"));
+      }
+
       await updateBalanceAndNetwork(provider, signer);
       await fetchTransactions();
     } catch (withdrawError) {
@@ -678,8 +696,10 @@ function Terminal() {
 
         <ContractInfo
           shipmentId={currentShipmentId}
+          account={account}
           status={status}
           escrowBalance={escrowBalance}
+          depositedAmount={depositedAmount}
           blHash={blHash}
           isValidatedByAI={Boolean(shipment.isValidatedByAI || shipment.blHash)}
           loading={loadingContract}
@@ -694,15 +714,13 @@ function Terminal() {
           onBLFileChange={handleBLFileChange}
           withdrawId={withdrawId}
           setWithdrawId={setWithdrawId}
+          currentShipmentId={currentShipmentId}
+          status={status}
+          isValidatedByAI={Boolean(shipment.isValidatedByAI || shipment.blHash)}
           onDeposit={onDeposit}
           onSubmitBL={onSubmitBL}
           onWithdraw={onWithdraw}
-          canWithdraw={
-            status === 1 &&
-            Number(escrowBalance) > 0 &&
-            isValidatedByAI &&
-            withdrawId.trim().length > 0
-          }
+          canWithdraw={(status === 1 || isValidatedByAI) && Number(escrowBalance) > 0}
           pendingAction={pendingAction}
         />
 

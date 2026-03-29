@@ -9,14 +9,20 @@ const STEPS = [
   { key: "closed", label: "CLOSED", helper: "Transaction complete" },
 ];
 
-function getStepperState(status, isValidatedByAI, blHash) {
-  const hasValidatedProof = Boolean(isValidatedByAI || blHash);
+function hasValidShipmentId(shipmentId) {
+  return Boolean(shipmentId && shipmentId !== "None" && Number(shipmentId) > 0);
+}
 
-  if (status === 3) {
+function getStepperState({ canShowProgress, status, hasValidatedProof, hasSettledProof, hasClosedProof }) {
+  if (!canShowProgress) {
+    return 0;
+  }
+
+  if (hasClosedProof) {
     return 5;
   }
 
-  if (status === 2) {
+  if (hasSettledProof) {
     return 4;
   }
 
@@ -33,16 +39,38 @@ function getStepperState(status, isValidatedByAI, blHash) {
 
 export default function ContractInfo({
   shipmentId,
+  account,
   status,
   escrowBalance,
+  depositedAmount,
   blHash,
   isValidatedByAI,
   loading,
 }) {
   const { t } = useI18n();
-  const hasValidatedProof = Boolean(isValidatedByAI || blHash);
-  const currentStep = getStepperState(status, isValidatedByAI, blHash);
-  const progressWidth = `${((currentStep - 1) / (STEPS.length - 1)) * 100}%`;
+  const validShipmentId = hasValidShipmentId(shipmentId);
+  const hasConnectedAccount = Boolean(account);
+  const canShowProgress = validShipmentId && hasConnectedAccount;
+  const currentBalance = Number(escrowBalance);
+  const initialDepositedAmount = Number(depositedAmount);
+  const hasValidatedProof = canShowProgress && Boolean(isValidatedByAI || blHash);
+  const hasSettledProof =
+    canShowProgress &&
+    (Number(status) === 2 ||
+      (Number.isFinite(initialDepositedAmount) &&
+        Number.isFinite(currentBalance) &&
+        currentBalance < initialDepositedAmount));
+  const hasClosedProof = canShowProgress && (Number(status) === 3 || currentBalance === 0);
+  const currentStep = getStepperState({
+    canShowProgress,
+    status: Number(status),
+    hasValidatedProof,
+    hasSettledProof,
+    hasClosedProof,
+  });
+  const progressWidth = canShowProgress
+    ? `${(Math.max(currentStep - 1, 0) / (STEPS.length - 1)) * 100}%`
+    : "0%";
 
   return (
     <div className="contract-info card">
@@ -54,19 +82,25 @@ export default function ContractInfo({
         {STEPS.map((step, index) => {
           const stepNumber = index + 1;
           const visualState =
-            step.key === "validated" && hasValidatedProof
-              ? "completed"
-              : stepNumber < currentStep
+            !canShowProgress
+              ? "upcoming"
+              : step.key === "closed" && hasClosedProof
                 ? "completed"
-                : stepNumber === currentStep
-                  ? "current"
-                  : "upcoming";
+                : step.key === "settled" && hasSettledProof
+                  ? "completed"
+                  : step.key === "validated" && hasValidatedProof
+                    ? "completed"
+                    : stepNumber < currentStep
+                      ? "completed"
+                      : stepNumber === currentStep
+                        ? "current"
+                        : "upcoming";
 
           return (
             <div
               key={step.key}
               className={`shipment-step ${visualState}`}
-              aria-current={stepNumber === currentStep ? "step" : undefined}
+              aria-current={canShowProgress && stepNumber === currentStep ? "step" : undefined}
             >
               <div className="shipment-step-circle">{stepNumber}</div>
               <div className="shipment-step-copy">
@@ -94,7 +128,7 @@ export default function ContractInfo({
           </div>
         </div>
       )}
-      {!loading && !hasValidatedProof && Number(status) === 1 ? (
+      {!loading && canShowProgress && !hasValidatedProof && Number(status) === 1 ? (
         <div className="contract-inline-alert">
           Awaiting AI validation. If the backend rejects the PDF, the flow stays blocked at FUNDED.
         </div>
