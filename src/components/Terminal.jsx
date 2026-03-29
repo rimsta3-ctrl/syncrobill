@@ -52,11 +52,14 @@ function Terminal() {
   const [account, setAccount] = useState("");
   const [balance, setBalance] = useState("0");
   const [networkOk, setNetworkOk] = useState(false);
-  const [currentShipmentId, setCurrentShipmentId] = useState("");
-  const [status, setStatus] = useState(0);
+  const [shipment, setShipment] = useState({
+    id: "",
+
+    status: 0,
+    blHash: "",
+    isValidatedByAI: false,
+  });
   const [escrowBalance, setEscrowBalance] = useState("0");
-  const [blHash, setBlHash] = useState("");
-  const [isValidatedByAI, setIsValidatedByAI] = useState(false);
   const [sellerAddress, setSellerAddress] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const [blFile, setBlFile] = useState(null);
@@ -71,25 +74,47 @@ function Terminal() {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
 
-  const syncShipmentState = async (providerToUse, shipmentIdToLoad) => {
-    const providerSafe = providerToUse || provider;
-    if (!providerSafe) {
-      return;
+  const currentShipmentId = shipment.id;
+  const status = shipment.status;
+  const blHash = shipment.blHash;
+  const isValidatedByAI = shipment.isValidatedByAI;
+  const waitForUiRefresh = (delayMs = 450) =>
+    new Promise((resolve) => {
+      window.setTimeout(resolve, delayMs);
+    });
+
+  const applyShipmentState = ({
+    id = "",
+    status: nextStatus = 0,
+    blHash: nextBlHash = "",
+    isValidatedByAI: nextIsValidatedByAI = false,
+  } = {}) => {
+    setShipment({
+      id: id ? String(id) : "",
+      status: Number(nextStatus ?? 0),
+      blHash: normalizeHash(nextBlHash),
+      isValidatedByAI: Boolean(nextIsValidatedByAI),
+    });
+  };
+
+  const fetchShipmentDetails = async (contractInstance, shipmentIdToLoad) => {
+    if (!contractInstance || !shipmentIdToLoad || Number(shipmentIdToLoad) < 1) {
+      applyShipmentState();
+      return null;
     }
 
-    const contract = getContract(providerSafe);
-    if (!contract) {
-      return;
-    }
+    const shipmentDetails = await contractInstance.shipments(BigInt(shipmentIdToLoad)).catch(() => null);
+    const balanceValue = await contractInstance.escrowBalance().catch(() => 0n);
 
-    const shipment = await contract.shipments(Number(shipmentIdToLoad));
-    const balanceValue = await contract.escrowBalance().catch(() => 0n);
-
-    setCurrentShipmentId(String(shipmentIdToLoad));
-    setStatus(Number(shipment?.state ?? 0));
-    setBlHash(normalizeHash(shipment?.billOfLadingHash));
-    setIsValidatedByAI(Boolean(shipment?.isValidatedByAI));
+    applyShipmentState({
+      id: shipmentIdToLoad,
+      status: shipmentDetails?.state,
+      blHash: shipmentDetails?.billOfLadingHash,
+      isValidatedByAI: shipmentDetails?.isValidatedByAI,
+    });
     setEscrowBalance(formatEther(balanceValue ?? 0n));
+
+    return shipmentDetails;
   };
 
   const addToast = (type, text) => {
@@ -159,21 +184,15 @@ function Terminal() {
       const signerSafe = signer;
 
       if (!providerSafe || !signerSafe) {
-        setCurrentShipmentId("");
-        setStatus(0);
+        applyShipmentState();
         setEscrowBalance("0");
-        setBlHash("");
-        setIsValidatedByAI(false);
         return;
       }
 
       const contract = getContract(providerSafe);
       if (!contract) {
-        setCurrentShipmentId("");
-        setStatus(0);
+        applyShipmentState();
         setEscrowBalance("0");
-        setBlHash("");
-        setIsValidatedByAI(false);
         return;
       }
 
@@ -183,24 +202,20 @@ function Terminal() {
 
       if (Number(targetShipmentId) > 0) {
         const targetShipment = await contract?.shipments?.(BigInt(targetShipmentId)).catch(() => null);
-        setCurrentShipmentId(String(targetShipmentId));
-        setStatus(Number(targetShipment?.state ?? 0));
-        setBlHash(normalizeHash(targetShipment?.billOfLadingHash));
-        setIsValidatedByAI(Boolean(targetShipment?.isValidatedByAI));
+        applyShipmentState({
+          id: targetShipmentId,
+          status: targetShipment?.state,
+          blHash: targetShipment?.billOfLadingHash,
+          isValidatedByAI: targetShipment?.isValidatedByAI,
+        });
       } else {
-        setCurrentShipmentId("");
-        setStatus(0);
-        setBlHash("");
-        setIsValidatedByAI(false);
+        applyShipmentState();
       }
 
       setEscrowBalance(formatEther(balanceValue ?? 0n));
     } catch (refreshError) {
-      setCurrentShipmentId("");
-      setStatus(0);
+      applyShipmentState();
       setEscrowBalance("0");
-      setBlHash("");
-      setIsValidatedByAI(false);
       setError("");
       console.error(refreshError);
     } finally {
@@ -349,7 +364,7 @@ function Terminal() {
 
       setMessage(t("terminal.messages.depositSuccess", { shipmentId }));
       addToast("success", t("terminal.messages.depositSuccess", { shipmentId }));
-      setCurrentShipmentId(shipmentId);
+      applyShipmentState({ id: shipmentId, status: 1 });
       setDepositAmount("");
       setWithdrawId(shipmentId);
       await refreshData(provider, shipmentId);
@@ -466,14 +481,27 @@ function Terminal() {
       addToast("info", "Signature IA validée. Ouverture de MetaMask...");
 
       const tx = await contract.submitBL(BigInt(shipmentId), hashHex, getBytes(signatureHex));
-      await tx.wait();
+      const receipt = await tx.wait();
+      setShipment((current) => ({
+        ...current,
+        id: String(shipmentId),
+        blHash: normalizeHash(hashHex),
+        isValidatedByAI: true,
+        status: Math.max(Number(current.status ?? 0), 1),
+      }));
 
-      // Reflect the confirmed on-chain state immediately, even before any async refetch completes.
-      setCurrentShipmentId(String(shipmentId));
+      const blValidatedEventSeen = receipt?.logs?.some((log) => {
+        try {
+          return contract.interface.parseLog(log)?.name === "BLValidated";
+        } catch {
+          return false;
+        }
+      });
+
+      await fetchShipmentDetails(contract, shipmentId);
+      await waitForUiRefresh(blValidatedEventSeen ? 450 : 700);
+      await fetchShipmentDetails(contract, shipmentId);
       setWithdrawId(String(shipmentId));
-      setBlHash(hashHex);
-      setIsValidatedByAI(true);
-      setStatus((currentStatus) => (currentStatus < 1 ? 1 : currentStatus));
 
       if (supabase) {
         addToast("info", t("terminal.messages.syncingDatabase"));
@@ -490,6 +518,7 @@ function Terminal() {
       setMessage(t("terminal.messages.blSuccess", { shipmentId }));
       addToast("success", t("terminal.messages.blSuccess", { shipmentId }));
       setBlFile(null);
+      await waitForUiRefresh(250);
       await refreshData(provider, shipmentId);
       await fetchTransactions();
     } catch (submitError) {
@@ -593,11 +622,17 @@ function Terminal() {
 
       setMessage(`Shipment #${nextShipmentId} validated on-chain.`);
       addToast("success", `Shipment #${nextShipmentId} passed blockchain validation.`);
+      await waitForUiRefresh(250);
+      await fetchShipmentDetails(contract, nextShipmentId);
       await refreshData(provider, nextShipmentId);
       await fetchTransactions();
     };
 
     contract.on("BLValidated", handleBLValidated);
+
+
+
+    
 
     return () => {
       contract.off("BLValidated", handleBLValidated);
@@ -608,6 +643,8 @@ function Terminal() {
     const selectedFile = event.target.files?.[0] || null;
     setBlFile(selectedFile);
   };
+
+  console.log("Statut actuel du shipment:", shipment);
 
   return (
     <div className="terminal">
@@ -644,7 +681,7 @@ function Terminal() {
           status={status}
           escrowBalance={escrowBalance}
           blHash={blHash}
-          isValidatedByAI={isValidatedByAI}
+          isValidatedByAI={Boolean(shipment.isValidatedByAI || shipment.blHash)}
           loading={loadingContract}
         />
 
@@ -775,6 +812,7 @@ function Terminal() {
       <footer className="terminal-footer">{t("terminal.footer")}</footer>
     </div>
   );
+  
 }
 
 export default Terminal;

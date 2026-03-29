@@ -9,7 +9,9 @@ const STEPS = [
   { key: "closed", label: "CLOSED", helper: "Transaction complete" },
 ];
 
-function getStepperState(status, isValidatedByAI) {
+function getStepperState(status, isValidatedByAI, blHash) {
+  const hasValidatedProof = Boolean(isValidatedByAI || blHash);
+
   if (status === 3) {
     return 5;
   }
@@ -18,7 +20,7 @@ function getStepperState(status, isValidatedByAI) {
     return 4;
   }
 
-  if (status === 1 && isValidatedByAI) {
+  if (status === 1 && hasValidatedProof) {
     return 3;
   }
 
@@ -38,7 +40,8 @@ export default function ContractInfo({
   loading,
 }) {
   const { t } = useI18n();
-  const currentStep = getStepperState(status, isValidatedByAI);
+  const hasValidatedProof = Boolean(isValidatedByAI || blHash);
+  const currentStep = getStepperState(status, isValidatedByAI, blHash);
   const progressWidth = `${((currentStep - 1) / (STEPS.length - 1)) * 100}%`;
 
   return (
@@ -51,7 +54,13 @@ export default function ContractInfo({
         {STEPS.map((step, index) => {
           const stepNumber = index + 1;
           const visualState =
-            stepNumber < currentStep ? "completed" : stepNumber === currentStep ? "current" : "upcoming";
+            step.key === "validated" && hasValidatedProof
+              ? "completed"
+              : stepNumber < currentStep
+                ? "completed"
+                : stepNumber === currentStep
+                  ? "current"
+                  : "upcoming";
 
           return (
             <div
@@ -85,7 +94,7 @@ export default function ContractInfo({
           </div>
         </div>
       )}
-      {!loading && !isValidatedByAI && Number(status) === 1 ? (
+      {!loading && !hasValidatedProof && Number(status) === 1 ? (
         <div className="contract-inline-alert">
           Awaiting AI validation. If the backend rejects the PDF, the flow stays blocked at FUNDED.
         </div>

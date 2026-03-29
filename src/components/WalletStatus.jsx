@@ -48,4 +48,5 @@ export default function WalletStatus({ address, balance, networkOk, onConnect, e
       )}
     </div>
   );
+
 }
