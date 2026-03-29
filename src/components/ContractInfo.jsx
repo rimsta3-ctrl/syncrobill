@@ -45,6 +45,7 @@ export default function ContractInfo({
   depositedAmount,
   blHash,
   isValidatedByAI,
+  forceClosed,
   loading,
 }) {
   const { t } = useI18n();
@@ -60,7 +61,7 @@ export default function ContractInfo({
       (Number.isFinite(initialDepositedAmount) &&
         Number.isFinite(currentBalance) &&
         currentBalance < initialDepositedAmount));
-  const hasClosedProof = canShowProgress && (Number(status) === 3 || currentBalance === 0);
+  const hasClosedProof = canShowProgress && (Boolean(forceClosed) || Number(status) === 3 || currentBalance === 0);
   const currentStep = getStepperState({
     canShowProgress,
     status: Number(status),

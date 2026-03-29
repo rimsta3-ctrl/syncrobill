@@ -32,6 +32,15 @@ const normalizeHash = (value = "") => {
   return value;
 };
 
+const COMPLETION_POPUP_MESSAGES = {
+  en: "Congratulations! Your transaction has been successfully established.",
+  fr: "Félicitations ! Votre transaction a été établie avec succès.",
+  de: "Glückwunsch! Ihre Transaktion wurde erfolgreich abgeschlossen.",
+  it: "Congratulazioni! La tua transazione è stata conclusa con successo.",
+  es: "¡Felicidades! Su transacción se ha completado con éxito.",
+  ar: "تهانينا! تم إتمام معاملتك بنجاح.",
+};
+
 function getReadableError(error, fallback) {
   if (error?.message?.includes("could not coalesce error")) {
     return fallback;
@@ -73,12 +82,16 @@ function Terminal() {
   const [loadingContract, setLoadingContract] = useState(false);
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
+  const [showCompletionPopup, setShowCompletionPopup] = useState(false);
+  const [withdrawLocked, setWithdrawLocked] = useState(false);
+  const [forceClosedStep, setForceClosedStep] = useState(false);
 
   const currentShipmentId = shipment.id;
   const status = shipment.status;
   const blHash = shipment.blHash;
   const isValidatedByAI = shipment.isValidatedByAI;
   const depositedAmount = shipment.depositedAmount;
+  const completionPopupMessage = COMPLETION_POPUP_MESSAGES[i18n.language] || COMPLETION_POPUP_MESSAGES.en;
   const waitForUiRefresh = (delayMs = 450) =>
     new Promise((resolve) => {
       window.setTimeout(resolve, delayMs);
@@ -98,6 +111,47 @@ function Terminal() {
       isValidatedByAI: Boolean(nextIsValidatedByAI),
       depositedAmount: String(nextDepositedAmount ?? "0"),
     });
+  };
+
+  const prepareNextShipment = async (shipmentIdToAdvanceFrom = "") => {
+    const baseId = Number(shipmentIdToAdvanceFrom || currentShipmentId || 0);
+    const nextShipmentId = baseId > 0 ? String(baseId + 1) : "1";
+
+    setShowCompletionPopup(false);
+    setForceClosedStep(false);
+    setWithdrawLocked(false);
+    setPendingAction("");
+    setMessage("");
+    setError("");
+    setBlFile(null);
+    setEscrowBalance("0");
+    setDepositAmount("0.01");
+    setWithdrawId(nextShipmentId);
+    applyShipmentState({
+      id: nextShipmentId,
+      status: 0,
+      blHash: "",
+      isValidatedByAI: false,
+      depositedAmount: "0",
+    });
+
+    if (provider && signer) {
+      await updateBalanceAndNetwork(provider, signer);
+    }
+  };
+
+  const handleCompletionPopupClose = () => {
+    const completedShipmentId = currentShipmentId;
+    setShowCompletionPopup(false);
+    setForceClosedStep(true);
+    setShipment((current) => ({
+      ...current,
+      status: 3,
+    }));
+
+    window.setTimeout(() => {
+      void prepareNextShipment(completedShipmentId);
+    }, 3000);
   };
 
   const fetchShipmentDetails = async (contractInstance, shipmentIdToLoad) => {
@@ -373,6 +427,9 @@ function Terminal() {
 
       setMessage(t("terminal.messages.depositSuccess", { shipmentId }));
       addToast("success", t("terminal.messages.depositSuccess", { shipmentId }));
+      setWithdrawLocked(false);
+      setForceClosedStep(false);
+      setShowCompletionPopup(false);
       applyShipmentState({ id: shipmentId, status: 1, depositedAmount: depositAmount });
       setDepositAmount("");
       setWithdrawId(shipmentId);
@@ -579,6 +636,12 @@ function Terminal() {
       const contract = getContract(signer);
       const tx = await contract.withdraw(Number(targetWithdrawId));
       await tx.wait();
+      setWithdrawLocked(true);
+      setShowCompletionPopup(true);
+      setShipment((current) => ({
+        ...current,
+        status: Math.max(Number(current.status ?? 0), 2),
+      }));
 
       if (supabase) {
         addToast("info", t("terminal.messages.syncingDatabase"));
@@ -593,7 +656,14 @@ function Terminal() {
       }
 
       const refreshedData = await refreshData(provider, targetWithdrawId);
-      if (Number(refreshedData?.balance ?? 0) === 0) {
+      const refreshedStatus = Number(refreshedData?.shipment?.state ?? 0);
+      const refreshedBalance = Number(refreshedData?.balance ?? 0);
+      setShipment((current) => ({
+        ...current,
+        status: Math.max(Number(current.status ?? 0), refreshedStatus >= 2 ? refreshedStatus : 2),
+      }));
+
+      if (refreshedBalance === 0) {
         const zeroBalanceMessage = `${t("terminal.messages.withdrawSuccess")} Escrow balance reached zero.`;
         setMessage(zeroBalanceMessage);
         addToast("success", zeroBalanceMessage);
@@ -702,6 +772,7 @@ function Terminal() {
           depositedAmount={depositedAmount}
           blHash={blHash}
           isValidatedByAI={Boolean(shipment.isValidatedByAI || shipment.blHash)}
+          forceClosed={forceClosedStep}
           loading={loadingContract}
         />
 
@@ -721,8 +792,25 @@ function Terminal() {
           onSubmitBL={onSubmitBL}
           onWithdraw={onWithdraw}
           canWithdraw={(status === 1 || isValidatedByAI) && Number(escrowBalance) > 0}
+          withdrawLocked={withdrawLocked || status >= 2 || Number(escrowBalance) === 0}
           pendingAction={pendingAction}
         />
+
+        {showCompletionPopup ? (
+          <div
+            className="completion-popup-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="completion-popup-title"
+          >
+            <div className="completion-popup card">
+              <h3 id="completion-popup-title">{completionPopupMessage}</h3>
+              <button className="btn primary" onClick={handleCompletionPopupClose}>
+                OK
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <div className="transactions-history card">
           <h2>{t("terminal.historyTitle")}</h2>
