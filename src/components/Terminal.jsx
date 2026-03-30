@@ -21,7 +21,8 @@ const formatWallet = (value = "") =>
 
 const normalizeAddress = (value = "") => value.toLowerCase();
 const contractExplorerUrl = `https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`;
-const BL_VALIDATION_API_URL = "http://localhost:8000/validate-bl";
+const BL_VALIDATION_API_URL =
+  import.meta.env.VITE_BL_API_URL || "http://localhost:8000/validate-bl";
 const EMPTY_BYTES32 = `0x${"0".repeat(64)}`;
 
 const normalizeHash = (value = "") => {
@@ -80,7 +81,6 @@ function Terminal() {
   const [loadingContract, setLoadingContract] = useState(false);
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
-  // ✅ FIX 1 : état showCompletionPopup restauré (avait été supprimé)
   const [showCompletionPopup, setShowCompletionPopup] = useState(false);
   const [withdrawLocked, setWithdrawLocked] = useState(false);
   const [forceClosedStep, setForceClosedStep] = useState(false);
@@ -92,7 +92,10 @@ function Terminal() {
   const depositedAmount = shipment.depositedAmount;
   const completionPopupMessage =
     COMPLETION_POPUP_MESSAGES[i18n.language] || COMPLETION_POPUP_MESSAGES.en;
-  const shouldShowCompletionPopup = Number(status) === 2 && !forceClosedStep;
+  const isDismissed =
+    localStorage.getItem(`syncrobill_closed_${currentShipmentId}`) === "true";
+  const shouldShowCompletionPopup =
+    Number(status) === 2 && !forceClosedStep && !isDismissed;
 
   const waitForUiRefresh = (delayMs = 450) =>
     new Promise((resolve) => {
@@ -142,33 +145,15 @@ function Terminal() {
     }
   };
 
-  /**
-   * MACHINE D'ÉTAT — logique CLOSED (étape 5) :
-   *
-   * CLOSED devient vert UNIQUEMENT si :
-   *   1. shipmentId est valide
-   *   2. account est connecté
-   *   3. forceClosedStep === true  (positionné ICI, après clic OK)
-   *
-   * Séquence :
-   *   tx confirmée → SETTLED vert + popup s'ouvre
-   *   user clique OK → popup se ferme → CLOSED vert immédiatement
-   *   3 secondes → reset complet + shipmentId incrémenté
-   */
   const handleCompletionPopupClose = () => {
     const completedShipmentId = currentShipmentId;
 
-    // A. Fermer le popup
+    localStorage.setItem(`syncrobill_closed_${completedShipmentId}`, "true");
+
     setShowCompletionPopup(false);
-
-    // B. CLOSED passe au vert immédiatement — status=3 + forceClosedStep=true
     setForceClosedStep(true);
-    setShipment((current) => ({
-      ...current,
-      status: 3,
-    }));
+    setShipment((current) => ({ ...current, status: 3 }));
 
-    // C. Reset uniquement 3s APRÈS le clic OK de l'utilisateur
     window.setTimeout(() => {
       void prepareNextShipment(completedShipmentId);
     }, 3000);
@@ -183,7 +168,11 @@ function Terminal() {
     const shipmentDetails = await contractInstance
       .shipments(BigInt(shipmentIdToLoad))
       .catch(() => null);
-    const balanceValue = await contractInstance.escrowBalance().catch(() => 0n);
+
+    // Use shipment value only if still Locked — not the global contract balance
+    const shipmentState = Number(shipmentDetails?.state ?? 0);
+    const escrowForShipment =
+      shipmentState === 1 ? formatEther(shipmentDetails?.value ?? 0n) : "0";
 
     applyShipmentState({
       id: shipmentIdToLoad,
@@ -192,7 +181,7 @@ function Terminal() {
       isValidatedByAI: shipmentDetails?.isValidatedByAI,
       depositedAmount: formatEther(shipmentDetails?.value ?? 0n),
     });
-    setEscrowBalance(formatEther(balanceValue ?? 0n));
+    setEscrowBalance(escrowForShipment);
 
     return shipmentDetails;
   };
@@ -278,17 +267,42 @@ function Terminal() {
         return { balance: "0", shipment: null };
       }
 
-      const balanceValue = await contract?.escrowBalance?.().catch(() => 0n);
       const shipmentCount = await contract?.shipmentCount?.().catch(() => 0n);
       const targetShipmentId =
         shipmentIdOverride || currentShipmentId || shipmentCount.toString();
-      const formattedBalance = formatEther(balanceValue ?? 0n);
       let targetShipment = null;
 
       if (Number(targetShipmentId) > 0) {
         targetShipment = await contract
           ?.shipments?.(BigInt(targetShipmentId))
           .catch(() => null);
+
+        const alreadyClosed =
+          localStorage.getItem(`syncrobill_closed_${targetShipmentId}`) === "true";
+
+        if (alreadyClosed) {
+          // Shipment fully dismissed — jump to next fresh state
+          const nextId = String(Number(targetShipmentId) + 1);
+          applyShipmentState({
+            id: nextId,
+            status: 0,
+            blHash: "",
+            isValidatedByAI: false,
+            depositedAmount: "0",
+          });
+          setEscrowBalance("0");
+          setForceClosedStep(false);
+          setWithdrawLocked(false);
+          return { balance: "0", shipment: null };
+        }
+
+        // Escrow is only non-zero while the shipment is Locked (state 1)
+        const shipmentState = Number(targetShipment?.state ?? 0);
+        const escrowForShipment =
+          shipmentState === 1
+            ? formatEther(targetShipment?.value ?? 0n)
+            : "0";
+
         applyShipmentState({
           id: targetShipmentId,
           status: targetShipment?.state,
@@ -296,12 +310,13 @@ function Terminal() {
           isValidatedByAI: targetShipment?.isValidatedByAI,
           depositedAmount: formatEther(targetShipment?.value ?? 0n),
         });
+        setEscrowBalance(escrowForShipment);
+        return { balance: escrowForShipment, shipment: targetShipment };
       } else {
         applyShipmentState();
+        setEscrowBalance("0");
+        return { balance: "0", shipment: null };
       }
-
-      setEscrowBalance(formattedBalance);
-      return { balance: formattedBalance, shipment: targetShipment };
     } catch (refreshError) {
       applyShipmentState();
       setEscrowBalance("0");
@@ -370,20 +385,6 @@ function Terminal() {
         setError("");
       }
 
-      window.ethereum.on("accountsChanged", async (accounts) => {
-        if (accounts.length === 0) {
-          setAccount("");
-          setBalance("0");
-          return;
-        }
-        await updateBalanceAndNetwork(providerInstance, signerInstance);
-      });
-
-      window.ethereum.on("chainChanged", async () => {
-        await updateBalanceAndNetwork(providerInstance, signerInstance);
-        await refreshData(providerInstance);
-      });
-
       setMessage(t("terminal.messages.connected"));
       addToast("success", t("terminal.messages.connected"));
     } catch (connectError) {
@@ -430,7 +431,6 @@ function Terminal() {
       const ethValue = parseEther(depositAmount.toString());
       const tx = await contract.createShipment(sellerAddress, { value: ethValue });
       await tx.wait();
-      window.alert("DEBUG: La transaction est confirmee !");
 
       const shipmentCount = await contract.shipmentCount();
       const shipmentId = shipmentCount.toString();
@@ -501,8 +501,7 @@ function Terminal() {
 
     try {
       const contract = getContract(signer);
-      const shipmentId =
-        currentShipmentId || (await contract.shipmentCount()).toString();
+      const shipmentId = currentShipmentId;
 
       if (!shipmentId || Number(shipmentId) < 1) {
         throw new Error(t("terminal.errors.noShipmentForBL"));
@@ -675,20 +674,22 @@ function Terminal() {
       const tx = await contract.withdraw(Number(targetWithdrawId));
       await tx.wait();
 
-      // 1. Verrouiller le bouton immédiatement après confirmation tx
+      // 1. Lock button immediately after tx confirmation
       setWithdrawLocked(true);
       setForceClosedStep(false);
 
-      // 2. Étape 4 (SETTLED) → verte : status passe à 2
+      // 2. SETTLED step → green: status becomes 2
       setShipment((current) => ({
         ...current,
         status: 2,
       }));
+      setEscrowBalance("0");
       setPendingAction("");
+
       window.setTimeout(() => {
         setShowCompletionPopup(true);
-        console.log("Popup forcee a true");
       }, 150);
+
       window.setTimeout(() => {
         void (async () => {
           if (supabase) {
@@ -704,23 +705,8 @@ function Terminal() {
             }
           }
 
-          const refreshedData = await refreshData(provider, targetWithdrawId);
-          const refreshedStatus = Number(refreshedData?.shipment?.state ?? 0);
-          const refreshedBalance = Number(refreshedData?.balance ?? 0);
-
-          setShipment((current) => ({
-            ...current,
-            status: Math.max(Number(current.status ?? 0), refreshedStatus >= 2 ? refreshedStatus : 2),
-          }));
-
-          if (refreshedBalance === 0) {
-            const zeroBalanceMessage = `${t("terminal.messages.withdrawSuccess")} Escrow balance reached zero.`;
-            setMessage(zeroBalanceMessage);
-            addToast("success", zeroBalanceMessage);
-          } else {
-            setMessage(t("terminal.messages.withdrawSuccess"));
-            addToast("success", t("terminal.messages.withdrawSuccess"));
-          }
+          setMessage(t("terminal.messages.withdrawSuccess"));
+          addToast("success", t("terminal.messages.withdrawSuccess"));
 
           await updateBalanceAndNetwork(provider, signer);
           await fetchTransactions();
@@ -729,7 +715,6 @@ function Terminal() {
         });
       }, 1000);
       return;
-
 
     } catch (withdrawError) {
       console.error(withdrawError);
@@ -741,7 +726,6 @@ function Terminal() {
           : getReadableError(withdrawError, t("terminal.errors.withdrawFailed"));
       setError(readableError);
       addToast("error", readableError);
-    } finally {
       setPendingAction("");
     }
   };
@@ -753,6 +737,32 @@ function Terminal() {
   useEffect(() => {
     if (!provider || !signer) return;
     refreshData(provider);
+  }, [provider, signer]);
+
+  useEffect(() => {
+    if (!provider || !signer || !window.ethereum) return;
+
+    const handleAccountsChanged = async (accounts) => {
+      if (accounts.length === 0) {
+        setAccount("");
+        setBalance("0");
+        return;
+      }
+      await updateBalanceAndNetwork(provider, signer);
+    };
+
+    const handleChainChanged = async () => {
+      await updateBalanceAndNetwork(provider, signer);
+      await refreshData(provider);
+    };
+
+    window.ethereum.on("accountsChanged", handleAccountsChanged);
+    window.ethereum.on("chainChanged", handleChainChanged);
+
+    return () => {
+      window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+      window.ethereum.removeListener("chainChanged", handleChainChanged);
+    };
   }, [provider, signer]);
 
   useEffect(() => {
@@ -811,7 +821,10 @@ function Terminal() {
             <p className="completion-popup-message">
               The withdrawal has been confirmed and the shipment is ready to close.
             </p>
-            <button className="btn primary completion-popup-button" onClick={handleCompletionPopupClose}>
+            <button
+              className="btn primary completion-popup-button"
+              onClick={handleCompletionPopupClose}
+            >
               OK
             </button>
           </div>
@@ -855,11 +868,7 @@ function Terminal() {
           depositedAmount={depositedAmount}
           blHash={blHash}
           isValidatedByAI={Boolean(shipment.isValidatedByAI || shipment.blHash)}
-          forceClosed={
-            // CLOSED (étape 5) vert UNIQUEMENT si :
-            // 1. shipmentId valide  2. account connecté  3. user a cliqué OK
-            Boolean(forceClosedStep && currentShipmentId && account)
-          }
+          forceClosed={Boolean(forceClosedStep && currentShipmentId && account)}
           loading={loadingContract}
         />
 
@@ -878,9 +887,7 @@ function Terminal() {
           onDeposit={onDeposit}
           onSubmitBL={onSubmitBL}
           onWithdraw={onWithdraw}
-          canWithdraw={
-            (status === 1 || isValidatedByAI) && Number(escrowBalance) > 0
-          }
+          canWithdraw={isValidatedByAI && Number(escrowBalance) > 0}
           withdrawLocked={
             withdrawLocked || status >= 2 || Number(escrowBalance) === 0
           }
