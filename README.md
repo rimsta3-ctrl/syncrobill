@@ -48,6 +48,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_PRIVATE_KEY=your_wallet_private_key_for_hardhat_deployments
 VITE_RPC_URL=your_sepolia_rpc_url
 VITE_CONTRACT_ADDRESS=deployed_syncrobill_contract_address
+VITE_BL_API_URL=http://localhost:8000/validate-bl
 ```
 
 Notes:
@@ -123,4 +124,3 @@ npx hardhat run scripts/deploy.js --network sepolia
 - `npm test` is not wired to a real test runner yet.
 - The contract currently uses a simple escrow flow and does not include oracle-driven shipment verification.
 - The terminal refresh focuses on the latest shipment state from the deployed contract.
-
