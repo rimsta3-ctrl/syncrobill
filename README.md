@@ -1,126 +1,137 @@
-# Syncrobill
+Syncrobill
+Syncrobill is a trade-finance dApp that simulates a Letter of Credit flow on Ethereum. An importer locks funds in escrow on Sepolia, an exporter uploads a Bill of Lading PDF that is validated by an AI backend and hashed on-chain, and funds are released once the document is verified.
+What the app does
 
-Syncrobill is a trade-finance dApp that combines a Sepolia escrow smart contract, a React/Vite frontend, MetaMask wallet flows, and optional Supabase storage for shipment documents and history.
+Importers create a shipment and lock ETH in escrow on Sepolia.
+Exporters upload a Bill of Lading PDF. The backend validates its content (required keywords + amount match) and signs the SHA-256 hash with a server key.
+The signed hash is submitted on-chain. The contract verifies the server signature before accepting it.
+Exporters can withdraw escrowed funds once the B/L is validated.
+All shipments are mirrored to Supabase for history and document storage.
+The interface supports English, French, German, Italian, Spanish, and Arabic.
 
-## What the app does
+Stack
 
-- Importers create a shipment and lock funds in escrow on Sepolia.
-- Exporters upload a bill of lading PDF, which is hashed in the browser with SHA-256.
-- The B/L hash is submitted on-chain and the PDF can be stored in Supabase Storage.
-- Exporters can withdraw funds when the shipment is locked and a B/L hash exists.
-- Users can review shipment history in the terminal UI.
-- The interface supports English, French, German, Italian, Spanish, and Arabic.
+Frontend: React 18 + Vite + React Router
+Blockchain: Solidity 0.8.24 + Hardhat + Ethers v6
+Wallet: MetaMask on Sepolia testnet
+AI validation backend: Python + FastAPI + PyPDF2 + eth_account
+Storage and history: Supabase database + Supabase Storage
+UI helpers: Framer Motion, Lucide React
 
-## Stack
+Project structure
+textcontracts/
+  syncrobill.sol          Escrow smart contract with B/L validation
+scripts/
+  deploy.js               Hardhat deployment script (reads .env.deploy)
+backend/
+  main.py                 FastAPI B/L validation service
+src/
+  App.jsx                 App routes
+  constants.js            Contract address + ABI resolver
+  supabaseClient.js       Supabase client (null-safe if unconfigured)
+  hooks/
+    useWallet.js          MetaMask connection, balance, network
+    useShipment.js        On-chain shipment logic (deposit, submitBL, withdraw)
+    useSupabase.js        Database reads and writes
+  components/
+    Terminal.jsx          Main dApp UI
+    ActionPanel.jsx       Deposit / B/L upload / withdraw forms
+    ContractInfo.jsx      Current shipment state display
+    WalletStatus.jsx      Wallet connection status
+    LandingPage.jsx       Landing route
+    Navbar.jsx
+  utils/
+    blockchain.js         Provider, contract, network helpers
+  i18n.jsx                Translations (en, fr, de, it, es, ar)
+  abis/
+    Syncrobil.json        Contract ABI
+generate_address.py       Derives the public address from a private key
+Prerequisites
 
-- Frontend: React 18 + Vite + React Router
-- Blockchain: Solidity + Hardhat + Ethers v6
-- Wallet: MetaMask on Sepolia
-- Storage and history: Supabase database + Supabase Storage
-- UI helpers: Framer Motion, Lucide React
+Node.js 18 or newer and npm
+Python 3.10 or newer and pip
+MetaMask browser extension
+Sepolia ETH (free from a faucet)
+A Supabase project (optional — blockchain actions work without it, but history and document storage will not)
 
-## Project structure
-
-```text
-contracts/            Solidity smart contract
-scripts/deploy.js     Hardhat deployment script
-src/App.jsx           App routes
-src/components/       Landing page and transaction terminal UI
-src/utils/blockchain.js
-src/supabaseClient.js Frontend Supabase client
-```
-
-## Prerequisites
-
-- Node.js 18 or newer
-- npm
-- MetaMask
-- Sepolia ETH for test transactions
-- A Supabase project if you want document upload and history persistence
-
-## Environment variables
-
-Create a local `.env` file in the project root with these values:
-
-```bash
+Environment variables
+This project uses two separate .env files to keep deployment secrets away from the browser bundle.
+.env — frontend only (safe to have VITE_ prefix)
+bashVITE_CONTRACT_ADDRESS=deployed_syncrobill_contract_address
 VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-VITE_PRIVATE_KEY=your_wallet_private_key_for_hardhat_deployments
-VITE_RPC_URL=your_sepolia_rpc_url
-VITE_CONTRACT_ADDRESS=deployed_syncrobill_contract_address
 VITE_BL_API_URL=http://localhost:8000/validate-bl
-```
+VITE_CONTRACT_ADDRESS is optional during local development — the frontend falls back to a hardcoded Sepolia address. All VITE_* variables are injected into the browser bundle by Vite, so never put private keys here.
+.env.deploy — Hardhat scripts only (never read by Vite)
+bash# Wallet that pays gas for deployment
+DEPLOY_PRIVATE_KEY=your_deployer_wallet_private_key
 
-Notes:
+# Sepolia RPC endpoint (Infura, Alchemy, Ankr, etc.)
+DEPLOY_RPC_URL=https://sepolia.infura.io/v3/your_project_id
 
-- `VITE_CONTRACT_ADDRESS` is optional during early local development. The frontend falls back to Hardhat's default local deployment address if it is missing.
-- The deployment script and network config read `VITE_PRIVATE_KEY` and `VITE_RPC_URL`.
-- `.env` is already ignored by git and should stay private.
-
-## Install
-
-```bash
+# Public address matching SYNCROBILL_SIGNER_PRIVATE_KEY in the backend
+# Run: python generate_address.py  to get this value
+DEPLOY_SERVER_SIGNER=0x...
+Backend .env — FastAPI service
+bashSYNCROBILL_SIGNER_PRIVATE_KEY=your_server_signing_private_key
+Both .env and .env.deploy are git-ignored and should never be committed.
+Install
+bash# Node dependencies
 npm install --legacy-peer-deps
-```
 
-## Run the frontend
+# Python dependencies
+pip install -r requirements.txt
+Run the frontend
+bashnpm run dev
+Routes:
 
-```bash
-npm run dev
-```
+/ — landing page
+/terminal — wallet connection, shipment actions, transaction history
 
-The app exposes two main routes:
+Run the backend
+The B/L validation service must be running for document submission to work.
+bashcd backend
+uvicorn main:app --reload
+The service listens on http://localhost:8000 by default. The frontend reads its URL from VITE_BL_API_URL.
+To confirm the signing key is correctly configured before deploying:
+bashpython generate_address.py
+This prints the public address derived from SYNCROBILL_SIGNER_PRIVATE_KEY. Copy it into DEPLOY_SERVER_SIGNER in .env.deploy.
+Deploy the smart contract
+The contract constructor takes the server signer address as a parameter. This means the AI validation key is configurable at deploy time and can be rotated later without redeployment.
+bashnpx hardhat run scripts/deploy.js --network sepolia
+The script reads DEPLOY_SERVER_SIGNER from .env.deploy and passes it to the constructor automatically. After deployment:
 
-- `/` for the landing page
-- `/terminal` for wallet connection, shipment actions, and transaction history
+Copy the printed contract address.
+Set VITE_CONTRACT_ADDRESS in .env.
+Restart the Vite dev server if it is already running.
 
-## Deploy the smart contract
+To rotate the server signing key after deployment (no redeployment needed):
+solidity// Call from the owner wallet
+syncrobil.setServerSigner(newSignerAddress);
+Supabase setup
+When Supabase is configured, the app expects:
 
-The Solidity contract lives in `contracts/syncrobill.sol` and the deployed contract name is `Syncrobil`.
+A shipments table with columns: blockchain_id, buyer, seller, amount, bl_hash, document_url, status
+A Storage bucket named documents with public read access
 
-Deploy to Sepolia with:
+If Supabase is not configured (env vars missing), the client is set to null and all database calls are silently skipped. Blockchain actions still work.
+Expected user flow
 
-```bash
-npx hardhat run scripts/deploy.js --network sepolia
-```
+Connect MetaMask and switch to Sepolia when prompted.
+(Importer) Enter the seller address and ETH amount, then click Deposit Funds. This calls createShipment on-chain and records the shipment in Supabase.
+(Exporter) Upload a Bill of Lading PDF. The app sends it to the FastAPI backend, which checks for required keywords (Bill of Lading, Shipper, Consignee) and verifies the amount matches the escrowed value.
+If valid, the backend returns a signed SHA-256 hash. The app calls submitBL on-chain with the hash and signature. The contract verifies the signature against serverSigner.
+(Exporter) Click Confirm Withdrawal. This calls withdraw, which checks isValidatedByAI before transferring funds.
 
-After deployment:
+Useful commands
+bashnpm run dev                                          # Start frontend
+npm run build                                        # Production build
+uvicorn backend.main:app --reload                    # Start validation backend
+npx hardhat run scripts/deploy.js --network sepolia  # Deploy contract
+python generate_address.py                           # Verify signing key
+Current limitations
 
-1. Copy the deployed contract address from the terminal output.
-2. Set `VITE_CONTRACT_ADDRESS` in `.env`.
-3. Restart the Vite dev server if it is already running.
-
-## Expected user flow
-
-1. Connect MetaMask.
-2. Switch or add the Sepolia network when prompted.
-3. Enter the seller address and deposit amount.
-4. Create a shipment and lock funds on-chain.
-5. Upload a PDF bill of lading from the exporter section.
-6. Let the app hash the file, upload it to Supabase, and submit the hash on-chain.
-7. Withdraw escrowed funds for the shipment once the B/L has been submitted.
-
-## Supabase expectations
-
-When Supabase is configured, the frontend expects:
-
-- A `shipments` table with fields used by the app:
-  `blockchain_id`, `buyer`, `seller`, `amount`, `bl_hash`, `document_url`, `status`
-- A Storage bucket named `documents`
-
-If Supabase is not configured, blockchain actions can still work, but document upload and transaction history will not.
-
-## Useful commands
-
-```bash
-npm run dev
-npm run build
-npm run preview
-npx hardhat run scripts/deploy.js --network sepolia
-```
-
-## Current limitations
-
-- `npm test` is not wired to a real test runner yet.
-- The contract currently uses a simple escrow flow and does not include oracle-driven shipment verification.
-- The terminal refresh focuses on the latest shipment state from the deployed contract.
+npm test is not wired to a real test runner. The contract has no test suite yet — the test/ folder contains Hardhat boilerplate for a different contract.
+B/L validation is keyword-based and amount-matching only. There is no semantic document understanding or OCR for scanned PDFs.
+The terminal displays the state of one shipment at a time (the latest). Switching between past shipments requires manual ID input.
+The app requires MetaMask. WalletConnect and other providers are not supported.
