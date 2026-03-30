@@ -28,7 +28,6 @@ const normalizeHash = (value = "") => {
   if (!value || value === EMPTY_BYTES32) {
     return "";
   }
-
   return value;
 };
 
@@ -45,7 +44,6 @@ function getReadableError(error, fallback) {
   if (error?.message?.includes("could not coalesce error")) {
     return fallback;
   }
-
   return (
     error?.shortMessage ||
     error?.reason ||
@@ -82,6 +80,7 @@ function Terminal() {
   const [loadingContract, setLoadingContract] = useState(false);
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
+  // ✅ FIX 1 : état showCompletionPopup restauré (avait été supprimé)
   const [showCompletionPopup, setShowCompletionPopup] = useState(false);
   const [withdrawLocked, setWithdrawLocked] = useState(false);
   const [forceClosedStep, setForceClosedStep] = useState(false);
@@ -91,7 +90,10 @@ function Terminal() {
   const blHash = shipment.blHash;
   const isValidatedByAI = shipment.isValidatedByAI;
   const depositedAmount = shipment.depositedAmount;
-  const completionPopupMessage = COMPLETION_POPUP_MESSAGES[i18n.language] || COMPLETION_POPUP_MESSAGES.en;
+  const completionPopupMessage =
+    COMPLETION_POPUP_MESSAGES[i18n.language] || COMPLETION_POPUP_MESSAGES.en;
+  const shouldShowCompletionPopup = Number(status) === 2 && !forceClosedStep;
+
   const waitForUiRefresh = (delayMs = 450) =>
     new Promise((resolve) => {
       window.setTimeout(resolve, delayMs);
@@ -140,15 +142,33 @@ function Terminal() {
     }
   };
 
+  /**
+   * MACHINE D'ÉTAT — logique CLOSED (étape 5) :
+   *
+   * CLOSED devient vert UNIQUEMENT si :
+   *   1. shipmentId est valide
+   *   2. account est connecté
+   *   3. forceClosedStep === true  (positionné ICI, après clic OK)
+   *
+   * Séquence :
+   *   tx confirmée → SETTLED vert + popup s'ouvre
+   *   user clique OK → popup se ferme → CLOSED vert immédiatement
+   *   3 secondes → reset complet + shipmentId incrémenté
+   */
   const handleCompletionPopupClose = () => {
     const completedShipmentId = currentShipmentId;
+
+    // A. Fermer le popup
     setShowCompletionPopup(false);
+
+    // B. CLOSED passe au vert immédiatement — status=3 + forceClosedStep=true
     setForceClosedStep(true);
     setShipment((current) => ({
       ...current,
       status: 3,
     }));
 
+    // C. Reset uniquement 3s APRÈS le clic OK de l'utilisateur
     window.setTimeout(() => {
       void prepareNextShipment(completedShipmentId);
     }, 3000);
@@ -160,7 +180,9 @@ function Terminal() {
       return null;
     }
 
-    const shipmentDetails = await contractInstance.shipments(BigInt(shipmentIdToLoad)).catch(() => null);
+    const shipmentDetails = await contractInstance
+      .shipments(BigInt(shipmentIdToLoad))
+      .catch(() => null);
     const balanceValue = await contractInstance.escrowBalance().catch(() => 0n);
 
     applyShipmentState({
@@ -187,15 +209,12 @@ function Terminal() {
     if (transaction.status === "Released") {
       return t("terminal.priority.none");
     }
-
     if (transaction.status === "Validated") {
       return "AI approved";
     }
-
     if (!transaction.bl_hash) {
       return t("terminal.priority.actionRequired");
     }
-
     return t("terminal.priority.readyForWithdrawal");
   };
 
@@ -209,7 +228,9 @@ function Terminal() {
       setLoadingTransactions(true);
       const { data, error: fetchError } = await supabase
         .from("shipments")
-        .select("blockchain_id, buyer, seller, amount, bl_hash, document_url, status")
+        .select(
+          "blockchain_id, buyer, seller, amount, bl_hash, document_url, status"
+        )
         .or(`buyer.eq.${account},seller.eq.${account}`)
         .order("blockchain_id", { ascending: false });
 
@@ -227,7 +248,10 @@ function Terminal() {
       );
     } catch (fetchTransactionsError) {
       console.error(fetchTransactionsError);
-      const readableError = getReadableError(fetchTransactionsError, t("terminal.errors.historyLoad"));
+      const readableError = getReadableError(
+        fetchTransactionsError,
+        t("terminal.errors.historyLoad")
+      );
       setError(readableError);
       addToast("error", readableError);
     } finally {
@@ -256,12 +280,15 @@ function Terminal() {
 
       const balanceValue = await contract?.escrowBalance?.().catch(() => 0n);
       const shipmentCount = await contract?.shipmentCount?.().catch(() => 0n);
-      const targetShipmentId = shipmentIdOverride || currentShipmentId || shipmentCount.toString();
+      const targetShipmentId =
+        shipmentIdOverride || currentShipmentId || shipmentCount.toString();
       const formattedBalance = formatEther(balanceValue ?? 0n);
       let targetShipment = null;
 
       if (Number(targetShipmentId) > 0) {
-        targetShipment = await contract?.shipments?.(BigInt(targetShipmentId)).catch(() => null);
+        targetShipment = await contract
+          ?.shipments?.(BigInt(targetShipmentId))
+          .catch(() => null);
         applyShipmentState({
           id: targetShipmentId,
           status: targetShipment?.state,
@@ -298,7 +325,10 @@ function Terminal() {
         setBalance(Number(formatEther(balanceBn)).toFixed(4));
       }
     } catch (balanceError) {
-      const readableError = getReadableError(balanceError, t("terminal.errors.balanceNetwork"));
+      const readableError = getReadableError(
+        balanceError,
+        t("terminal.errors.balanceNetwork")
+      );
       setError(readableError);
       addToast("error", readableError);
       console.error(balanceError);
@@ -346,7 +376,6 @@ function Terminal() {
           setBalance("0");
           return;
         }
-
         await updateBalanceAndNetwork(providerInstance, signerInstance);
       });
 
@@ -374,19 +403,16 @@ function Terminal() {
       addToast("error", t("terminal.errors.connectWalletFirst"));
       return;
     }
-
     if (!networkOk) {
       setError(t("terminal.errors.wrongNetwork"));
       addToast("error", t("terminal.errors.wrongNetwork"));
       return;
     }
-
     if (!depositAmount || Number(depositAmount) <= 0) {
       setError(t("terminal.errors.invalidDepositAmount"));
       addToast("error", t("terminal.errors.invalidDepositAmount"));
       return;
     }
-
     if (!sellerAddress || !isAddress(sellerAddress)) {
       setError(t("terminal.errors.invalidSellerAddress"));
       addToast("error", t("terminal.errors.invalidSellerAddress"));
@@ -404,6 +430,7 @@ function Terminal() {
       const ethValue = parseEther(depositAmount.toString());
       const tx = await contract.createShipment(sellerAddress, { value: ethValue });
       await tx.wait();
+      window.alert("DEBUG: La transaction est confirmee !");
 
       const shipmentCount = await contract.shipmentCount();
       const shipmentId = shipmentCount.toString();
@@ -419,7 +446,6 @@ function Terminal() {
           document_url: null,
           status: "Locked",
         });
-
         if (insertError) {
           throw insertError;
         }
@@ -442,8 +468,8 @@ function Terminal() {
         depositError?.code === 4001
           ? "Transaction rejected in MetaMask."
           : depositError?.message?.toLowerCase().includes("insufficient funds")
-            ? "Not enough SepoliaETH to complete this deposit."
-            : getReadableError(depositError, t("terminal.errors.depositFailed"));
+          ? "Not enough SepoliaETH to complete this deposit."
+          : getReadableError(depositError, t("terminal.errors.depositFailed"));
       setError(readableError);
       addToast("error", readableError);
     } finally {
@@ -457,13 +483,11 @@ function Terminal() {
       addToast("error", t("terminal.errors.connectWalletFirst"));
       return;
     }
-
     if (!networkOk) {
       setError(t("terminal.errors.wrongNetwork"));
       addToast("error", t("terminal.errors.wrongNetwork"));
       return;
     }
-
     if (!blFile || blFile.type !== "application/pdf") {
       setError(t("terminal.errors.invalidPdf"));
       addToast("error", t("terminal.errors.invalidPdf"));
@@ -477,14 +501,15 @@ function Terminal() {
 
     try {
       const contract = getContract(signer);
-      const shipmentId = currentShipmentId || (await contract.shipmentCount()).toString();
+      const shipmentId =
+        currentShipmentId || (await contract.shipmentCount()).toString();
 
       if (!shipmentId || Number(shipmentId) < 1) {
         throw new Error(t("terminal.errors.noShipmentForBL"));
       }
 
-      const shipment = await contract.shipments(Number(shipmentId));
-      const expectedAmount = formatEther(shipment?.value ?? 0n);
+      const shipmentData = await contract.shipments(Number(shipmentId));
+      const expectedAmount = formatEther(shipmentData?.value ?? 0n);
 
       const validationPayload = new FormData();
       validationPayload.append("file", blFile);
@@ -503,11 +528,15 @@ function Terminal() {
       }
 
       if (!validationResponse.ok) {
-        throw new Error(validationResult?.detail || "IA validation service is unavailable.");
+        throw new Error(
+          validationResult?.detail || "IA validation service is unavailable."
+        );
       }
 
       if (!validationResult?.valid) {
-        const rejectionReasons = validationResult?.metadata?.validation_errors?.join(" ") || "IA Rejection";
+        const rejectionReasons =
+          validationResult?.metadata?.validation_errors?.join(" ") ||
+          "IA Rejection";
         throw new Error(rejectionReasons);
       }
 
@@ -515,11 +544,15 @@ function Terminal() {
       const signatureHex = validationResult?.signature;
 
       if (!hashHex || !signatureHex) {
-        throw new Error("The validation service returned an incomplete signature payload.");
+        throw new Error(
+          "The validation service returned an incomplete signature payload."
+        );
       }
 
       if (!/^0x[a-fA-F0-9]{64}$/.test(hashHex)) {
-        throw new Error("The validation service returned an invalid bytes32 hash.");
+        throw new Error(
+          "The validation service returned an invalid bytes32 hash."
+        );
       }
 
       let documentUrl = null;
@@ -538,7 +571,9 @@ function Terminal() {
           throw new Error(t("terminal.errors.uploadFailed"));
         }
 
-        const { data: publicUrlData } = supabase.storage.from("documents").getPublicUrl(filePath);
+        const { data: publicUrlData } = supabase.storage
+          .from("documents")
+          .getPublicUrl(filePath);
         documentUrl = publicUrlData?.publicUrl || null;
       }
 
@@ -546,7 +581,11 @@ function Terminal() {
       setMessage("Signature Blockchain...");
       addToast("info", "Signature IA validée. Ouverture de MetaMask...");
 
-      const tx = await contract.submitBL(BigInt(shipmentId), hashHex, getBytes(signatureHex));
+      const tx = await contract.submitBL(
+        BigInt(shipmentId),
+        hashHex,
+        getBytes(signatureHex)
+      );
       const receipt = await tx.wait();
       setShipment((current) => ({
         ...current,
@@ -577,7 +616,8 @@ function Terminal() {
           .eq("blockchain_id", Number(shipmentId));
 
         if (updateError) {
-          throw updateError;
+          console.error(updateError);
+          addToast("error", "Database sync failed after withdrawal.");
         }
       }
 
@@ -593,12 +633,12 @@ function Terminal() {
         submitError?.code === 4001
           ? "Transaction rejected in MetaMask."
           : submitError?.message === t("terminal.errors.noShipmentForBL") ||
-              submitError?.message === t("terminal.errors.uploadFailed") ||
-              submitError?.message?.includes("IA Rejection") ||
-              submitError?.message?.includes("Missing required") ||
-              submitError?.message?.includes("Expected amount")
-            ? submitError.message
-            : getReadableError(submitError, t("terminal.errors.submitBLFailed"));
+            submitError?.message === t("terminal.errors.uploadFailed") ||
+            submitError?.message?.includes("IA Rejection") ||
+            submitError?.message?.includes("Missing required") ||
+            submitError?.message?.includes("Expected amount")
+          ? submitError.message
+          : getReadableError(submitError, t("terminal.errors.submitBLFailed"));
       setError(readableError);
       addToast("error", readableError);
     } finally {
@@ -614,13 +654,11 @@ function Terminal() {
       addToast("error", t("terminal.errors.connectWalletFirst"));
       return;
     }
-
     if (!networkOk) {
       setError(t("terminal.errors.wrongNetwork"));
       addToast("error", t("terminal.errors.wrongNetwork"));
       return;
     }
-
     if (!targetWithdrawId || Number(targetWithdrawId) < 1) {
       setError(t("terminal.errors.invalidShipmentId"));
       addToast("error", t("terminal.errors.invalidShipmentId"));
@@ -636,52 +674,71 @@ function Terminal() {
       const contract = getContract(signer);
       const tx = await contract.withdraw(Number(targetWithdrawId));
       await tx.wait();
+
+      // 1. Verrouiller le bouton immédiatement après confirmation tx
       setWithdrawLocked(true);
-      setShowCompletionPopup(true);
+      setForceClosedStep(false);
+
+      // 2. Étape 4 (SETTLED) → verte : status passe à 2
       setShipment((current) => ({
         ...current,
-        status: Math.max(Number(current.status ?? 0), 2),
+        status: 2,
       }));
+      setPendingAction("");
+      window.setTimeout(() => {
+        setShowCompletionPopup(true);
+        console.log("Popup forcee a true");
+      }, 150);
+      window.setTimeout(() => {
+        void (async () => {
+          if (supabase) {
+            addToast("info", t("terminal.messages.syncingDatabase"));
+            const { error: updateError } = await supabase
+              .from("shipments")
+              .update({ status: "Released" })
+              .eq("blockchain_id", Number(targetWithdrawId));
 
-      if (supabase) {
-        addToast("info", t("terminal.messages.syncingDatabase"));
-        const { error: updateError } = await supabase
-          .from("shipments")
-          .update({ status: "Released" })
-          .eq("blockchain_id", Number(targetWithdrawId));
+            if (updateError) {
+              console.error(updateError);
+              addToast("error", "Database sync failed after withdrawal.");
+            }
+          }
 
-        if (updateError) {
-          throw updateError;
-        }
-      }
+          const refreshedData = await refreshData(provider, targetWithdrawId);
+          const refreshedStatus = Number(refreshedData?.shipment?.state ?? 0);
+          const refreshedBalance = Number(refreshedData?.balance ?? 0);
 
-      const refreshedData = await refreshData(provider, targetWithdrawId);
-      const refreshedStatus = Number(refreshedData?.shipment?.state ?? 0);
-      const refreshedBalance = Number(refreshedData?.balance ?? 0);
-      setShipment((current) => ({
-        ...current,
-        status: Math.max(Number(current.status ?? 0), refreshedStatus >= 2 ? refreshedStatus : 2),
-      }));
+          setShipment((current) => ({
+            ...current,
+            status: Math.max(Number(current.status ?? 0), refreshedStatus >= 2 ? refreshedStatus : 2),
+          }));
 
-      if (refreshedBalance === 0) {
-        const zeroBalanceMessage = `${t("terminal.messages.withdrawSuccess")} Escrow balance reached zero.`;
-        setMessage(zeroBalanceMessage);
-        addToast("success", zeroBalanceMessage);
-      } else {
-        setMessage(t("terminal.messages.withdrawSuccess"));
-        addToast("success", t("terminal.messages.withdrawSuccess"));
-      }
+          if (refreshedBalance === 0) {
+            const zeroBalanceMessage = `${t("terminal.messages.withdrawSuccess")} Escrow balance reached zero.`;
+            setMessage(zeroBalanceMessage);
+            addToast("success", zeroBalanceMessage);
+          } else {
+            setMessage(t("terminal.messages.withdrawSuccess"));
+            addToast("success", t("terminal.messages.withdrawSuccess"));
+          }
 
-      await updateBalanceAndNetwork(provider, signer);
-      await fetchTransactions();
+          await updateBalanceAndNetwork(provider, signer);
+          await fetchTransactions();
+        })().catch((backgroundError) => {
+          console.error(backgroundError);
+        });
+      }, 1000);
+      return;
+
+
     } catch (withdrawError) {
       console.error(withdrawError);
       const readableError =
         withdrawError?.code === 4001
           ? "Transaction rejected in MetaMask."
           : withdrawError?.message?.toLowerCase().includes("insufficient funds")
-            ? "Not enough SepoliaETH to cover gas for this withdrawal."
-            : getReadableError(withdrawError, t("terminal.errors.withdrawFailed"));
+          ? "Not enough SepoliaETH to cover gas for this withdrawal."
+          : getReadableError(withdrawError, t("terminal.errors.withdrawFailed"));
       setError(readableError);
       addToast("error", readableError);
     } finally {
@@ -709,7 +766,10 @@ function Terminal() {
       if (!nextShipmentId) return;
 
       setMessage(`Shipment #${nextShipmentId} validated on-chain.`);
-      addToast("success", `Shipment #${nextShipmentId} passed blockchain validation.`);
+      addToast(
+        "success",
+        `Shipment #${nextShipmentId} passed blockchain validation.`
+      );
       await waitForUiRefresh(250);
       await fetchShipmentDetails(contract, nextShipmentId);
       await refreshData(provider, nextShipmentId);
@@ -717,10 +777,6 @@ function Terminal() {
     };
 
     contract.on("BLValidated", handleBLValidated);
-
-
-
-    
 
     return () => {
       contract.off("BLValidated", handleBLValidated);
@@ -732,10 +788,35 @@ function Terminal() {
     setBlFile(selectedFile);
   };
 
-  console.log("Statut actuel du shipment:", shipment);
-
   return (
     <div className="terminal">
+      {shouldShowCompletionPopup && (
+        <div
+          className="completion-popup-overlay"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 999999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(0, 0, 0, 0.85)",
+          }}
+        >
+          <div className="completion-popup card">
+            <div className="completion-popup-icon" aria-hidden="true">
+              ✓
+            </div>
+            <h3>{completionPopupMessage}</h3>
+            <p className="completion-popup-message">
+              The withdrawal has been confirmed and the shipment is ready to close.
+            </p>
+            <button className="btn primary completion-popup-button" onClick={handleCompletionPopupClose}>
+              OK
+            </button>
+          </div>
+        </div>
+      )}
       <Navbar showBack onBack={() => navigate("/")} />
       <h2>{t("terminal.title")}</h2>
       <div className="app-container">
@@ -748,7 +829,9 @@ function Terminal() {
         </div>
 
         {!networkOk && account ? (
-          <div className="network-alert card">{t("terminal.errors.wrongNetwork")}</div>
+          <div className="network-alert card">
+            {t("terminal.errors.wrongNetwork")}
+          </div>
         ) : null}
 
         <div className="message-bar">
@@ -772,7 +855,11 @@ function Terminal() {
           depositedAmount={depositedAmount}
           blHash={blHash}
           isValidatedByAI={Boolean(shipment.isValidatedByAI || shipment.blHash)}
-          forceClosed={forceClosedStep}
+          forceClosed={
+            // CLOSED (étape 5) vert UNIQUEMENT si :
+            // 1. shipmentId valide  2. account connecté  3. user a cliqué OK
+            Boolean(forceClosedStep && currentShipmentId && account)
+          }
           loading={loadingContract}
         />
 
@@ -791,26 +878,14 @@ function Terminal() {
           onDeposit={onDeposit}
           onSubmitBL={onSubmitBL}
           onWithdraw={onWithdraw}
-          canWithdraw={(status === 1 || isValidatedByAI) && Number(escrowBalance) > 0}
-          withdrawLocked={withdrawLocked || status >= 2 || Number(escrowBalance) === 0}
+          canWithdraw={
+            (status === 1 || isValidatedByAI) && Number(escrowBalance) > 0
+          }
+          withdrawLocked={
+            withdrawLocked || status >= 2 || Number(escrowBalance) === 0
+          }
           pendingAction={pendingAction}
         />
-
-        {showCompletionPopup ? (
-          <div
-            className="completion-popup-overlay"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="completion-popup-title"
-          >
-            <div className="completion-popup card">
-              <h3 id="completion-popup-title">{completionPopupMessage}</h3>
-              <button className="btn primary" onClick={handleCompletionPopupClose}>
-                OK
-              </button>
-            </div>
-          </div>
-        ) : null}
 
         <div className="transactions-history card">
           <h2>{t("terminal.historyTitle")}</h2>
@@ -852,7 +927,9 @@ function Terminal() {
                       <td>{formatWallet(tx.buyer)}</td>
                       <td>{formatWallet(tx.seller)}</td>
                       <td>{tx.amount} ETH</td>
-                      <td className="history-hash">{tx.bl_hash || t("contract.notSubmitted")}</td>
+                      <td className="history-hash">
+                        {tx.bl_hash || t("contract.notSubmitted")}
+                      </td>
                       <td>
                         {tx.document_url ? (
                           <a
@@ -866,13 +943,19 @@ function Terminal() {
                             <FileText size={18} />
                           </a>
                         ) : (
-                          <span className="document-missing">{t("terminal.document.missing")}</span>
+                          <span className="document-missing">
+                            {t("terminal.document.missing")}
+                          </span>
                         )}
                       </td>
                       <td>
                         <span
                           className={`priority-badge ${
-                            !tx.bl_hash ? "required" : tx.status === "Released" ? "done" : "ready"
+                            !tx.bl_hash
+                              ? "required"
+                              : tx.status === "Released"
+                              ? "done"
+                              : "ready"
                           }`}
                         >
                           {getPriority(tx)}
@@ -885,15 +968,15 @@ function Terminal() {
                               tx.status === "Released"
                                 ? "released"
                                 : tx.status === "Validated"
-                                  ? "validated"
-                                  : "locked"
+                                ? "validated"
+                                : "locked"
                             }`}
                           >
                             {tx.status === "Released"
                               ? t("terminal.status.released")
                               : tx.status === "Validated"
-                                ? "Validated"
-                                : t("terminal.status.locked")}
+                              ? "Validated"
+                              : t("terminal.status.locked")}
                           </span>
                           <a
                             className="status-explorer-link"
@@ -918,7 +1001,6 @@ function Terminal() {
       <footer className="terminal-footer">{t("terminal.footer")}</footer>
     </div>
   );
-  
 }
 
 export default Terminal;
