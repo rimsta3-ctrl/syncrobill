@@ -4,13 +4,18 @@ pragma solidity ^0.8.24;
 /**
  * @title Syncrobil - Trade Finance Escrow with AI Validation
  * @dev Gère le cycle de vie d'une expédition avec vérification de signature par un backend IA.
+ *
+ * Changement vs version initiale :
+ *   - SERVER_SIGNER n'est plus une `constant` gravée dans le bytecode.
+ *   - Le owner peut la mettre à jour via setServerSigner() sans redéployer.
+ *   - Un event est émis à chaque changement pour garder une trace on-chain.
  */
 contract Syncrobil {
     address public owner;
-    
-    // L'ADRESSE PUBLIQUE DE TON SERVEUR FASTAPI
-    // Correspond à la clé privée SYNCROBILL_SIGNER_PRIVATE_KEY (0x7704...)
-    address public constant SERVER_SIGNER = 0xe8C9AbBf6ee89921140115f1BaE5c8feC3aF1A57;
+
+    // Adresse publique du serveur FastAPI autorisé à signer les B/L.
+    // Modifiable par le owner sans redéploiement.
+    address public serverSigner;
 
     enum State { Created, Locked, Released, Inactive }
 
@@ -19,29 +24,53 @@ contract Syncrobil {
         address seller;
         uint256 value;
         State state;
-        bytes32 billOfLadingHash; 
+        bytes32 billOfLadingHash;
         bool isValidatedByAI;
     }
 
     mapping(uint256 => Shipment) public shipments;
     uint256 public shipmentCount;
 
+    // --- Events ---
+
     event ShipmentCreated(uint256 id, address buyer, uint256 amount);
     event BLValidated(uint256 id, bytes32 documentHash);
     event PaymentReleased(uint256 id, address seller, uint256 amount);
     event Withdrawn(address exporter, uint256 amount);
 
+    /// @notice Émis chaque fois que le owner met à jour l'adresse du signataire serveur.
+    event ServerSignerUpdated(address indexed previousSigner, address indexed newSigner);
+
+    // --- Modifiers ---
+
     modifier onlyOwner() {
-        // Correction : "proprietaire" sans accent pour éviter l'erreur Unicode
         require(msg.sender == owner, "Seul le proprietaire peut executer ceci");
         _;
     }
 
-    constructor() {
+    // --- Constructor ---
+
+    /// @param _initialServerSigner Adresse publique correspondant à SYNCROBILL_SIGNER_PRIVATE_KEY.
+    constructor(address _initialServerSigner) {
+        require(_initialServerSigner != address(0), "Adresse signataire invalide");
         owner = msg.sender;
+        serverSigner = _initialServerSigner;
     }
 
-    // --- Fonctions de Vue ---
+    // --- Admin ---
+
+    /**
+     * @notice Met à jour l'adresse du signataire serveur autorisé à valider les B/L.
+     * @dev    Appeler cette fonction suffit en cas de rotation de clé — pas de redéploiement.
+     * @param  _newSigner Nouvelle adresse publique du serveur FastAPI.
+     */
+    function setServerSigner(address _newSigner) external onlyOwner {
+        require(_newSigner != address(0), "Adresse invalide");
+        emit ServerSignerUpdated(serverSigner, _newSigner);
+        serverSigner = _newSigner;
+    }
+
+    // --- Vue ---
 
     function escrowBalance() external view returns (uint256) {
         return address(this).balance;
@@ -74,20 +103,25 @@ contract Syncrobil {
     }
 
     /**
-     * @dev Soumission du B/L avec vérification cryptographique de l'IA.
+     * @dev Soumission du B/L avec vérification cryptographique du serveur IA.
+     *      Le contrat relit `serverSigner` à chaque appel — une rotation de clé
+     *      prend effet immédiatement sans redéploiement.
      */
     function submitBL(uint256 _id, bytes32 _docHash, bytes memory _signature) external {
         Shipment storage s = shipments[_id];
         require(s.state == State.Locked, "Expedition non active");
         require(msg.sender == s.seller, "Seul le vendeur peut soumettre le B/L");
 
-        // Recréation du hash signé (Standard Ethereum)
-        bytes32 messageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _docHash));
-        
+        // Recréation du hash signé (Standard EIP-191)
+        bytes32 messageHash = keccak256(
+            abi.encodePacked("\x19Ethereum Signed Message:\n32", _docHash)
+        );
+
         // Extraction de l'adresse du signataire depuis la signature
         address signer = recoverSigner(messageHash, _signature);
 
-        require(signer == SERVER_SIGNER, "Signature IA invalide ou non autorisee");
+        // On compare avec serverSigner (variable, pas constant)
+        require(signer == serverSigner, "Signature IA invalide ou non autorisee");
 
         s.billOfLadingHash = _docHash;
         s.isValidatedByAI = true;
@@ -100,15 +134,14 @@ contract Syncrobil {
      */
     function withdraw(uint256 _id) external {
         Shipment storage s = shipments[_id];
-        
+
         require(msg.sender == s.seller, "Seul le vendeur peut retirer");
         require(s.isValidatedByAI == true, "Document non valide par l'IA");
         require(s.state == State.Locked, "Fonds deja liberes ou inactifs");
 
         s.state = State.Released;
         uint256 amount = s.value;
-        
-        // Transfert sécurisé des fonds
+
         (bool success, ) = payable(s.seller).call{value: amount}("");
         require(success, "Transfert echoue");
 
@@ -118,12 +151,17 @@ contract Syncrobil {
 
     // --- Outils Cryptographiques (Internes) ---
 
-    function recoverSigner(bytes32 _ethSignedMessageHash, bytes memory _signature) internal pure returns (address) {
+    function recoverSigner(
+        bytes32 _ethSignedMessageHash,
+        bytes memory _signature
+    ) internal pure returns (address) {
         (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
         return ecrecover(_ethSignedMessageHash, v, r, s);
     }
 
-    function splitSignature(bytes memory sig) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
+    function splitSignature(
+        bytes memory sig
+    ) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
         require(sig.length == 65, "Longueur de signature invalide");
         assembly {
             r := mload(add(sig, 32))
