@@ -97,9 +97,18 @@ export function useWallet() {
       if (accounts.length === 0) {
         setAccount("");
         setBalance("0");
+        setSigner(null);
         return;
       }
-      await readBalanceAndNetwork(provider, signer);
+      // FIX: recreate signer for the new account — the old signer keeps the
+      // previous address and all subsequent transactions would be rejected.
+      try {
+        const newSigner = await provider.getSigner();
+        setSigner(newSigner);
+        await readBalanceAndNetwork(provider, newSigner);
+      } catch (err) {
+        setError(err?.message || "Failed to update signer after account change.");
+      }
     };
 
     const handleChainChanged = async () => {

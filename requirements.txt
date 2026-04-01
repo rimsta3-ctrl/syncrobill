@@ -3,3 +3,6 @@ uvicorn
 python-multipart
 web3
 PyPDF2
+python-dotenv
+eth-account
+slowapi

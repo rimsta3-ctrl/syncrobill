@@ -33,10 +33,10 @@ contract Syncrobil {
 
     // --- Events ---
 
-    event ShipmentCreated(uint256 id, address buyer, uint256 amount);
-    event BLValidated(uint256 id, bytes32 documentHash);
-    event PaymentReleased(uint256 id, address seller, uint256 amount);
-    event Withdrawn(address exporter, uint256 amount);
+    event ShipmentCreated(uint256 indexed id, address indexed buyer, uint256 amount);
+    event BLValidated(uint256 indexed id, bytes32 documentHash);
+    event PaymentReleased(uint256 indexed id, address indexed seller, uint256 amount);
+    event Withdrawn(address indexed exporter, uint256 amount);
 
     /// @notice Émis chaque fois que le owner met à jour l'adresse du signataire serveur.
     event ServerSignerUpdated(address indexed previousSigner, address indexed newSigner);

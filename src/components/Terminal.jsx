@@ -54,23 +54,24 @@ function Terminal() {
   const [withdrawId,    setWithdrawId]    = useState("");
 
   // ── hook: wallet ──────────────────────────────────────────────
-  // FIX 1: useWallet ne reçoit plus de callback qui référence shipmentHook
-  // avant sa déclaration. On passe onNetworkChange via un ref ci-dessous.
   const wallet = useWallet();
 
   // ── hook: supabase ────────────────────────────────────────────
   const db = useSupabase({ account: wallet.account });
 
   // ── stable refs pour les callbacks Supabase ──────────────────
-  // FIX 3: les callbacks sont dans des refs stables pour éviter
-  // que useShipment capture une version obsolète à chaque render.
-  const onDepositSuccessRef = useRef(null);
-  const onBLSuccessRef      = useRef(null);
+  const onDepositSuccessRef  = useRef(null);
+  const onBLSuccessRef       = useRef(null);
   const onWithdrawSuccessRef = useRef(null);
 
   onDepositSuccessRef.current = async (payload) => {
     addToast("info", t("terminal.messages.syncingDatabase"));
-    await db.recordDeposit(payload);
+    try {
+      await db.recordDeposit(payload);
+    } catch (err) {
+      addToast("error", "On-chain deposit succeeded but database sync failed. Refresh to see it in history.");
+      console.error("recordDeposit failed:", err);
+    }
     setDepositAmount("");
     setWithdrawId(payload.shipmentId);
     await wallet.refreshBalance();
@@ -94,24 +95,38 @@ function Terminal() {
     provider:  wallet.provider,
     signer:    wallet.signer,
     networkOk: wallet.networkOk,
-    // On passe des wrappers stables qui délèguent aux refs
+    account:   wallet.account,
     onDepositSuccess:  (p) => onDepositSuccessRef.current?.(p),
     onBLSuccess:       (p) => onBLSuccessRef.current?.(p),
     onWithdrawSuccess: (p) => onWithdrawSuccessRef.current?.(p),
   });
 
-  // FIX 1 (suite): maintenant que shipmentHook est déclaré,
-  // on branche le callback réseau correctement.
   const shipmentRefRef = useRef(shipmentHook.refresh);
   shipmentRefRef.current = shipmentHook.refresh;
   wallet.setOnNetworkChange(() => shipmentRefRef.current());
 
-  // FIX 2: déclencher refresh quand provider/signer deviennent disponibles
-  // (reproduit l'useEffect qui existait dans l'ancien Terminal)
+  // ── refresh au connect ────────────────────────────────────────
   useEffect(() => {
     if (!wallet.provider || !wallet.signer) return;
     shipmentHook.refresh();
-  }, [wallet.provider, wallet.signer]);
+  }, [wallet.provider, wallet.signer, wallet.account]);
+
+  // ── polling — STOPPED while any action is pending ────────────
+  // The polling calls refresh() which interacts with the contract.
+  // If it runs during AI validation or blockchain signing it can
+  // interfere with MetaMask and trigger unexpected popups.
+  useEffect(() => {
+    if (!wallet.provider || !wallet.signer || !wallet.account) return;
+
+    const intervalId = window.setInterval(() => {
+      // FIX: never poll while a tx/validation is in flight
+      if (shipmentHook.pendingAction) return;
+      shipmentHook.refresh();
+      db.fetchTransactions();
+    }, 8000); // also increased to 8s to reduce noise
+
+    return () => window.clearInterval(intervalId);
+  }, [wallet.provider, wallet.signer, wallet.account]);
 
   // ── toasts liés aux messages des hooks ───────────────────────
   useEffect(() => {
@@ -131,18 +146,29 @@ function Terminal() {
     const ok = await wallet.connect();
     if (ok) {
       addToast("success", t("terminal.messages.connected"));
-      // refresh est déclenché automatiquement par l'useEffect provider/signer ci-dessus
     }
   };
 
-  // ── refresh historique quand langue ou compte change ─────────
+  // ── refresh historique quand langue change ────────────────────
   useEffect(() => { db.fetchTransactions(); }, [i18n.language]);
 
   // ── valeurs dérivées ──────────────────────────────────────────
   const {
     id: currentShipmentId, status, blHash,
-    isValidatedByAI, depositedAmount,
+    isValidatedByAI, depositedAmount, seller: shipmentSeller,
   } = shipmentHook.shipment;
+
+  // ── auto-refresh when current shipment ID changes ─────────────
+  useEffect(() => {
+    if (!currentShipmentId) return;
+
+    const refreshAll = async () => {
+      await shipmentHook.refresh(currentShipmentId);
+      await db.fetchTransactions();
+    };
+
+    refreshAll().catch(() => {});
+  }, [currentShipmentId, shipmentHook.refresh, db.fetchTransactions]);
 
   const completionMessage =
     COMPLETION_MESSAGES[i18n.language] || COMPLETION_MESSAGES.en;
@@ -156,8 +182,15 @@ function Terminal() {
     !isDismissed &&
     shipmentHook.showCompletionPopup;
 
-  const canWithdraw      = isValidatedByAI && Number(shipmentHook.escrowBalance) > 0;
-  const withdrawDisabled = shipmentHook.withdrawLocked || status >= 2 || Number(shipmentHook.escrowBalance) === 0;
+  // isSeller is undefined while loading to avoid flashing the warning
+  const isSeller = shipmentHook.loadingContract
+    ? undefined
+    : Boolean(currentShipmentId) &&
+      Boolean(wallet.account) &&
+      Boolean(shipmentSeller) &&
+      wallet.account.toLowerCase() === shipmentSeller;
+
+  const canWithdraw = isValidatedByAI && Number(shipmentHook.escrowBalance) > 0;
 
   // ── render ────────────────────────────────────────────────────
   return (
@@ -247,12 +280,13 @@ function Terminal() {
           setWithdrawId={setWithdrawId}
           currentShipmentId={currentShipmentId}
           status={status}
-          isValidatedByAI={Boolean(isValidatedByAI || blHash)}
+          isValidatedByAI={Boolean(isValidatedByAI)}
           onDeposit={() => shipmentHook.deposit({ sellerAddress, depositAmount })}
           onSubmitBL={() => shipmentHook.submitBL({ blFile, currentShipmentId })}
           onWithdraw={() => shipmentHook.withdraw({ withdrawId })}
           canWithdraw={canWithdraw}
-          withdrawLocked={withdrawDisabled}
+          withdrawLocked={shipmentHook.withdrawLocked}
+          isSeller={isSeller}
           pendingAction={shipmentHook.pendingAction}
         />
 

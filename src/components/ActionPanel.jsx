@@ -18,6 +18,7 @@ export default function ActionPanel({
   onWithdraw,
   canWithdraw,
   withdrawLocked,
+  isSeller,
   pendingAction,
 }) {
   const { t } = useTranslation();
@@ -28,7 +29,19 @@ export default function ActionPanel({
     pendingAction === "aiValidation" ||
     pendingAction === "blockchainSignature";
   const isWithdrawing = pendingAction === "withdraw";
-  const shouldShowWithdraw = status === 1 || status === "Validated" || isValidatedByAI === true;
+
+  // Show withdraw ONLY if: AI validated + connected account IS the seller + shipment still active
+  const shouldShowWithdraw = isValidatedByAI === true && isSeller === true && Number(status) === 1;
+
+  // Show "not seller" warning only when BL can meaningfully be submitted
+  // (shipment exists, not yet validated, and current user is NOT the seller)
+  const canSubmitBL = !currentShipmentId || isSeller === true || isSeller === undefined;
+  const submitBLDisabled = isPending || !canSubmitBL;
+  const notSellerWarning =
+    currentShipmentId && isSeller === false && !isValidatedByAI
+      ? "Only the seller of this shipment can submit the Bill of Lading."
+      : null;
+
   const displayId = withdrawId || currentShipmentId || "";
   const submitLabel =
     pendingAction === "aiValidation"
@@ -84,7 +97,16 @@ export default function ActionPanel({
             <strong>{t("actions.selectedFile")}:</strong> {blFile?.name || t("actions.noFileSelected")}
           </div>
 
-          <button onClick={onSubmitBL} disabled={isPending} className="btn primary">
+          {notSellerWarning && (
+            <div
+              className="contract-inline-alert"
+              style={{ marginBottom: "8px" }}
+            >
+              {notSellerWarning}
+            </div>
+          )}
+
+          <button onClick={onSubmitBL} disabled={submitBLDisabled} className="btn primary">
             {isSubmittingBL ? (
               <span className="btn-loading">
                 <span className="spinner" aria-hidden="true" />

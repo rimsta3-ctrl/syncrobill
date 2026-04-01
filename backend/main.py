@@ -7,20 +7,37 @@ from decimal import Decimal, InvalidOperation
 from dotenv import load_dotenv
 from eth_account import Account
 from eth_account.messages import encode_defunct
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PyPDF2 import PdfReader
+
+# FIX: rate limiting — requires `slowapi` in requirements.txt
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 load_dotenv()
 
 REQUIRED_KEYWORDS = ("Bill of Lading", "Shipper", "Consignee")
-ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+# FIX: CORS origins loaded from env var so production deployments work.
+# Set ALLOWED_ORIGINS="https://yourapp.vercel.app,https://yourdomain.com" in .env
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 EXPECTED_SERVER_SIGNER = "0xe8C9AbBf6ee89921140115f1BaE5c8feC3aF1A57"
+
+# FIX: initialise the rate limiter (5 requests/minute per IP)
+limiter = Limiter(key_func=get_remote_address, default_limits=["5/minute"])
 
 app = FastAPI(
     title="Syncrobill B/L Validation Service",
-    version="1.2.0",
+    version="1.3.0",
 )
+
+# Register the rate-limit error handler so exceeded requests get a clean 429
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,7 +84,10 @@ def extract_amounts(text: str) -> list[Decimal]:
 
 
 @app.post("/validate-bl")
+# FIX: rate limit — 5 calls/minute per IP prevents signature farming
+@limiter.limit("5/minute")
 async def validate_bill_of_lading(
+    request: Request,
     file: UploadFile = File(...),
     expected_amount: str = Form(...),
 ):
@@ -123,9 +143,6 @@ async def validate_bill_of_lading(
             ),
         )
 
-    # This signs the raw 32-byte SHA-256 digest using Ethereum's personal_sign / EIP-191 format.
-    # Solidity recreates the same value with:
-    # keccak256("\x19Ethereum Signed Message:\n32" ++ _docHash)
     signable_message = encode_defunct(primitive=doc_hash_bytes)
     signed_message = Account.sign_message(signable_message, private_key=signer_key)
     signature_hex = signed_message.signature.hex()

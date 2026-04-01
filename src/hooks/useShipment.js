@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { formatEther, getBytes, parseEther, isAddress } from "ethers";
 import { getContract } from "../utils/blockchain";
 
@@ -6,10 +6,53 @@ const EMPTY_BYTES32 = `0x${"0".repeat(64)}`;
 const BL_VALIDATION_API_URL =
   import.meta.env.VITE_BL_API_URL || "http://localhost:8000/validate-bl";
 
+// FIX: timeout for AI backend call (30 seconds)
+const BL_API_TIMEOUT_MS = 30_000;
+
 const normalizeHash = (value = "") =>
   !value || value === EMPTY_BYTES32 ? "" : value;
 
 const wait = (ms = 450) => new Promise((res) => window.setTimeout(res, ms));
+
+/**
+ * fetchWithTimeout — wraps fetch() with an AbortController timeout.
+ * Throws a user-friendly error if the backend is unreachable or too slow.
+ */
+async function fetchWithTimeout(url, options = {}, timeoutMs = BL_API_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return response;
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error(`AI validation service timed out after ${timeoutMs / 1000}s. Please try again.`);
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+async function validateBLWithAI({ file, expectedAmount }) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("expected_amount", expectedAmount);
+
+  const validationResponse = await fetchWithTimeout(BL_VALIDATION_API_URL, {
+    method: "POST",
+    body: formData,
+  });
+
+  let validationResult = null;
+  try {
+    validationResult = await validationResponse.json();
+  } catch {
+    validationResult = null;
+  }
+
+  return { validationResponse, validationResult };
+}
 
 /**
  * useShipment
@@ -29,6 +72,7 @@ export function useShipment({
   provider,
   signer,
   networkOk,
+  account,
   onDepositSuccess,
   onBLSuccess,
   onWithdrawSuccess,
@@ -39,6 +83,7 @@ export function useShipment({
     blHash: "",
     isValidatedByAI: false,
     depositedAmount: "0",
+    seller: "",
   });
   const [escrowBalance,  setEscrowBalance]  = useState("0");
   const [pendingAction,  setPendingAction]  = useState("");
@@ -48,6 +93,7 @@ export function useShipment({
   const [showCompletionPopup, setShowCompletionPopup] = useState(false);
   const [error,   setError]   = useState("");
   const [message, setMessage] = useState("");
+  const previousShipmentIdRef = useRef("");
 
   // ---------- helpers ----------
 
@@ -57,6 +103,7 @@ export function useShipment({
     blHash: h = "",
     isValidatedByAI: ai = false,
     depositedAmount: amt = "0",
+    seller: sel = "",
   } = {}) => {
     setShipment({
       id:              id ? String(id) : "",
@@ -64,6 +111,7 @@ export function useShipment({
       blHash:          normalizeHash(h),
       isValidatedByAI: Boolean(ai),
       depositedAmount: String(amt ?? "0"),
+      seller:          sel ? sel.toLowerCase() : "",
     });
   }, []);
 
@@ -82,10 +130,56 @@ export function useShipment({
       blHash:          data?.billOfLadingHash,
       isValidatedByAI: data?.isValidatedByAI,
       depositedAmount: formatEther(data?.value ?? 0n),
+      seller:          data?.seller || "",
     });
     setEscrowBalance(escrow);
     return data;
   }, [applyShipmentState]);
+
+  const findLatestRelevantShipmentId = useCallback(async (contractInstance, walletAccount) => {
+    if (!contractInstance || !walletAccount) return "";
+
+    const normalizedAccount = walletAccount.toLowerCase();
+    let latestBuyerShipmentId = "";
+    let latestSellerActiveShipmentId = "";
+
+    try {
+      const buyerFilter = contractInstance.filters.ShipmentCreated(null, walletAccount);
+      const buyerEvents = await contractInstance.queryFilter(buyerFilter);
+      if (buyerEvents.length > 0) {
+        latestBuyerShipmentId =
+          buyerEvents[buyerEvents.length - 1].args?.[0]?.toString() || "";
+      }
+    } catch {
+      // Ignore unsupported indexed filtering and fall back to the global scan below.
+    }
+
+    try {
+      const createdEvents = await contractInstance.queryFilter(
+        contractInstance.filters.ShipmentCreated()
+      );
+
+      for (let i = createdEvents.length - 1; i >= 0; i--) {
+        const id = createdEvents[i].args?.[0]?.toString();
+        if (!id) continue;
+
+        const data = await contractInstance.shipments(BigInt(id)).catch(() => null);
+        if (!data) continue;
+
+        const seller = data?.seller?.toLowerCase?.() || "";
+        if (seller !== normalizedAccount) continue;
+
+        if (Number(data.state) === 1) {
+          latestSellerActiveShipmentId = id;
+          break;
+        }
+      }
+    } catch {
+      // Ignore query failures; caller will fall back to current local state.
+    }
+
+    return latestSellerActiveShipmentId || latestBuyerShipmentId || "";
+  }, []);
 
   // ---------- refresh (called externally too) ----------
 
@@ -94,8 +188,25 @@ export function useShipment({
     try {
       setLoadingContract(true);
       const contract = getContract(provider);
-      const count    = await contract.shipmentCount().catch(() => 0n);
-      const targetId = overrideId || shipment.id || count.toString();
+
+      let targetId = overrideId;
+
+      if (!targetId && account) {
+        const latestRelevantId = await findLatestRelevantShipmentId(contract, account);
+        if (latestRelevantId) {
+          targetId = latestRelevantId;
+        }
+      }
+
+      if (!targetId) {
+        targetId = shipment.id;
+      }
+
+      if (!targetId) {
+        applyShipmentState();
+        setEscrowBalance("0");
+        return;
+      }
 
       if (Number(targetId) <= 0) { applyShipmentState(); return; }
 
@@ -119,13 +230,21 @@ export function useShipment({
     } finally {
       setLoadingContract(false);
     }
-  }, [provider, signer, shipment.id, applyShipmentState, fetchShipmentFromChain]);
+  }, [
+    provider,
+    signer,
+    account,
+    shipment.id,
+    applyShipmentState,
+    fetchShipmentFromChain,
+    findLatestRelevantShipmentId,
+  ]);
 
   // ---------- prepareNextShipment ----------
 
-  const prepareNextShipment = useCallback(async (fromId = "") => {
+  const prepareNextShipment = useCallback(async (fromId = "", explicitNextId = "") => {
     const base   = Number(fromId || shipment.id || 0);
-    const nextId = base > 0 ? String(base + 1) : "1";
+    const nextId = explicitNextId || (base > 0 ? String(base + 1) : "1");
 
     setShowCompletionPopup(false);
     setForceClosedStep(false);
@@ -134,7 +253,7 @@ export function useShipment({
     setMessage("");
     setError("");
     setEscrowBalance("0");
-    applyShipmentState({ id: nextId });
+    applyShipmentState({ id: nextId, status: 0, seller: "", isValidatedByAI: false, blHash: "", depositedAmount: "0" });
   }, [shipment.id, applyShipmentState]);
 
   const handleCompletionPopupClose = useCallback(() => {
@@ -149,7 +268,8 @@ export function useShipment({
   // ---------- deposit ----------
 
   const deposit = async ({ sellerAddress, depositAmount }) => {
-    if (!signer)    return setError("Connect your wallet first.");
+    if (pendingAction) return;
+    if (!provider)  return setError("Connect your wallet first.");
     if (!networkOk) return setError("Wrong network. Switch to Sepolia.");
     if (!depositAmount || Number(depositAmount) <= 0)
       return setError("Enter a valid ETH amount.");
@@ -206,9 +326,10 @@ export function useShipment({
     setMessage("AI analysis in progress…");
 
     try {
-      // 1 — fetch expected amount from chain
-      const contract      = getContract(signer);
-      const data          = await contract.shipments(Number(shipmentId));
+      // 1 — fetch expected amount from chain (READ — use provider, not signer)
+      // Using signer here triggers a MetaMask popup before AI validation even starts.
+      const readContract   = getContract(provider);
+      const data           = await readContract.shipments(Number(shipmentId));
       const expectedAmount = formatEther(data?.value ?? 0n);
 
       // 2 — call FastAPI backend
@@ -216,35 +337,41 @@ export function useShipment({
       formData.append("file",            blFile);
       formData.append("expected_amount", expectedAmount);
 
-      const response = await fetch(BL_VALIDATION_API_URL, {
+      // FIX: use fetchWithTimeout to avoid infinite loading if backend is slow/down
+      const validationResponse = await fetchWithTimeout(BL_VALIDATION_API_URL, {
         method: "POST",
         body:   formData,
       });
 
-      let result = null;
-      try { result = await response.json(); } catch {}
-
-      if (!response.ok) {
-        throw new Error(result?.detail || "AI validation service unavailable.");
+      let validationResult = null;
+      try {
+        validationResult = await validationResponse.json();
+      } catch {
+        validationResult = null;
       }
-      if (!result?.valid) {
-        throw new Error(
-          result?.metadata?.validation_errors?.join(" ") || "AI rejected the document."
+
+      if (!validationResponse.ok) {
+        return setError(validationResult?.detail || "AI validation service unavailable.");
+      }
+      if (!validationResult?.valid) {
+        return setError(
+          validationResult?.metadata?.validation_errors?.join(" ") || "AI rejected the document."
         );
       }
 
-      const { hash: hashHex, signature: signatureHex } = result;
+      const { hash: hashHex, signature: signatureHex } = validationResult;
 
       if (!hashHex || !signatureHex)
         throw new Error("Validation service returned incomplete payload.");
       if (!/^0x[a-fA-F0-9]{64}$/.test(hashHex))
         throw new Error("Invalid bytes32 hash from validation service.");
 
-      // 3 — submit on-chain
+      // 3 — submit on-chain (WRITE — now we need the signer → MetaMask opens here)
       setPendingAction("blockchainSignature");
       setMessage("Blockchain signature…");
 
-      const tx      = await contract.submitBL(BigInt(shipmentId), hashHex, getBytes(signatureHex));
+      const writeContract = getContract(signer);
+      const tx      = await writeContract.submitBL(BigInt(shipmentId), hashHex, getBytes(signatureHex));
       const receipt = await tx.wait();
 
       setShipment((cur) => ({
@@ -255,12 +382,12 @@ export function useShipment({
       }));
 
       const blEventSeen = receipt?.logs?.some((log) => {
-        try { return contract.interface.parseLog(log)?.name === "BLValidated"; }
+        try { return writeContract.interface.parseLog(log)?.name === "BLValidated"; }
         catch { return false; }
       });
 
       await wait(blEventSeen ? 450 : 700);
-      await fetchShipmentFromChain(contract, shipmentId);
+      await fetchShipmentFromChain(readContract, shipmentId);
 
       setMessage(`Bill of Lading submitted for shipment #${shipmentId}.`);
       await onBLSuccess?.({ shipmentId, hashHex, blFile });
@@ -317,14 +444,49 @@ export function useShipment({
     }
   };
 
+  // ---------- reset state when the connected account changes ----------
+  // Without this, shipment.id from the previous account stays in state and
+  // refresh() reuses it, bypassing the event-based lookup and showing
+  // the wrong shipment to the newly connected account.
+  useEffect(() => {
+    applyShipmentState();
+    setEscrowBalance("0");
+    setWithdrawLocked(false);
+    setForceClosedStep(false);
+    setShowCompletionPopup(false);
+    setPendingAction("");
+    setError("");
+    setMessage("");
+  }, [account, applyShipmentState]);
+
+  useEffect(() => {
+    const previousId = previousShipmentIdRef.current;
+    const nextId = shipment.id || "";
+
+    if (nextId && previousId && nextId !== previousId) {
+      setWithdrawLocked(false);
+      setForceClosedStep(false);
+      setShowCompletionPopup(false);
+      setPendingAction("");
+      setEscrowBalance("0");
+      setShipment((cur) => ({
+        ...cur,
+        status: Number(cur.status) > 1 ? 0 : Number(cur.status ?? 0),
+      }));
+    }
+
+    previousShipmentIdRef.current = nextId;
+  }, [shipment.id]);
+
   // ---------- on-chain event listener ----------
 
   useEffect(() => {
-    if (!provider) return;
+    if (!provider || !account) return;
     const contract = getContract(provider);
     if (!contract)  return;
 
-    const handleBLValidated = async (validatedId) => {
+    const handleBLValidated = async (...args) => {
+      const validatedId = args[0];
       const id = validatedId?.toString?.() || "";
       if (!id) return;
       setMessage(`Shipment #${id} validated on-chain.`);
@@ -332,9 +494,28 @@ export function useShipment({
       await fetchShipmentFromChain(contract, id);
     };
 
+    const handleShipmentCreated = async (...args) => {
+      const createdId = args[0];
+      const id = createdId?.toString?.() || "";
+      if (!id) return;
+
+      const data = await contract.shipments(BigInt(id)).catch(() => null);
+      const seller = data?.seller?.toLowerCase?.() || "";
+      if (!seller || seller !== account.toLowerCase()) return;
+
+      setMessage(`New shipment #${id} detected.`);
+      await prepareNextShipment("", id);
+      await wait(150);
+      await fetchShipmentFromChain(contract, id);
+    };
+
+    contract.on("ShipmentCreated", handleShipmentCreated);
     contract.on("BLValidated", handleBLValidated);
-    return () => contract.off("BLValidated", handleBLValidated);
-  }, [provider, fetchShipmentFromChain]);
+    return () => {
+      contract.off("ShipmentCreated", handleShipmentCreated);
+      contract.off("BLValidated", handleBLValidated);
+    };
+  }, [provider, account, fetchShipmentFromChain, prepareNextShipment]);
 
   return {
     shipment,
